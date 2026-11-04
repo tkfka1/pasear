@@ -1,5 +1,5 @@
 import { useRpc } from "@getpaseo/plugin/client";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Platform, Pressable, ScrollView, Share, Text, TextInput, View } from "react-native";
 import { clearLogs, configureLogs, exportLogs, getLogDetail, getLogStatus, listLogs } from "../shared/logs";
@@ -39,29 +39,31 @@ function Detail({ id, hostId, colors }: { id: string; hostId: string; colors: Co
   </View>;
 }
 
-export function Logs({ colors, hostId }: { colors: Colors; hostId: string }) {
-  const [expanded, setExpanded] = useState(false), [selected, setSelected] = useState<string | null>(null);
+export function Logs({ colors, hostId, active, onNavigate }: { colors: Colors; hostId: string; active: boolean; onNavigate(): void }) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [connection, setConnection] = useState(""), [tool, setTool] = useState(""), [filters, setFilters] = useState({ connection: "", tool: "" });
   const [confirmDelete, setConfirmDelete] = useState(false), [notice, setNotice] = useState("");
   const [focused, setFocused] = useState("");
   const statusRpc = useRpc(getLogStatus), configureRpc = useRpc(configureLogs), clearRpc = useRpc(clearLogs), listRpc = useRpc(listLogs), exportRpc = useRpc(exportLogs);
   const cache = useQueryClient();
   const stateKey = ["pasear-log-status", hostId];
-  const state = useQuery({ queryKey: stateKey, queryFn: () => statusRpc({}), refetchInterval: 5000 });
+  const state = useQuery({ queryKey: stateKey, queryFn: () => statusRpc({}), enabled: active, refetchInterval: active ? 5000 : false });
   const applied = { connection: filters.connection || undefined, tool: filters.tool || undefined };
-  const rows = useInfiniteQuery({ queryKey: ["pasear-logs", hostId, filters], initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => listRpc({ ...applied, before: pageParam, limit: 25 }), getNextPageParam: (page) => page.nextCursor ?? undefined, enabled: expanded, retry: false });
+  const before = cursors[cursors.length - 1];
+  const rows = useQuery({ queryKey: ["pasear-logs", hostId, filters, before],
+    queryFn: () => listRpc({ ...applied, before, limit: 25 }), enabled: active, retry: false });
   useEffect(() => {
     const next = { connection: connection.trim(), tool: tool.trim() };
     if (next.connection === filters.connection && next.tool === filters.tool) return;
-    const timer = setTimeout(() => { setFilters(next); setSelected(null); }, 300);
+    const timer = setTimeout(() => { setFilters(next); setCursors([undefined]); setSelected(null); }, 300);
     return () => clearTimeout(timer);
   }, [connection, tool, filters]);
   const action = useMutation({ mutationFn: async (kind: "collect" | "skip" | "clear" | "export") => {
     setNotice("");
     if (kind === "collect" || kind === "skip") return configureRpc({ enabled: kind === "collect" });
     if (kind === "clear") {
-      const result = await clearRpc({}); setSelected(null); setConfirmDelete(false);
+      const result = await clearRpc({}); setCursors([undefined]); setSelected(null); setConfirmDelete(false);
       cache.removeQueries({ queryKey: ["pasear-log-detail", hostId] });
       await cache.resetQueries({ queryKey: ["pasear-logs", hostId] }); setNotice("저장된 로그를 삭제했습니다."); return result;
     }
@@ -73,15 +75,26 @@ export function Logs({ colors, hostId }: { colors: Colors; hostId: string }) {
   const text = { color: colors.foreground, fontSize: 14, lineHeight: 22 };
   const muted = { color: colors.foregroundMuted, fontSize: 13, lineHeight: 21 };
   const pending = action.isPending;
-  const entries = rows.data?.pages.flatMap((p) => p.entries) ?? [];
+  const entries = rows.data?.entries ?? [];
+  function navigate(next: (string | undefined)[]) { setCursors(next); setSelected(null); onNavigate(); }
+  function refresh() {
+    setCursors([undefined]); setSelected(null);
+    void cache.resetQueries({ queryKey: ["pasear-logs", hostId] }); void state.refetch(); onNavigate();
+  }
+  function pager(position: string) {
+    return <View accessibilityLabel={`로그 페이지 ${position}`} style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+      <Action colors={colors} label="이전 페이지" disabled={pending || rows.isFetching || cursors.length === 1} onPress={() => navigate(cursors.slice(0, -1))} />
+      <Text accessibilityLiveRegion="polite" style={muted}>{cursors.length}페이지 · {entries.length}건</Text>
+      <Action colors={colors} label="다음 페이지" disabled={pending || rows.isFetching || !rows.data?.nextCursor || rows.isError} onPress={() => { if (rows.data?.nextCursor) navigate([...cursors, rows.data.nextCursor]); }} />
+    </View>;
+  }
   function input(label: string, value: string, set: (v: string) => void) {
     return <TextInput accessibilityLabel={label} placeholder={label} placeholderTextColor={colors.foregroundMuted} value={value} onChangeText={set} maxLength={200} autoCapitalize="none" autoCorrect={false}
       onFocus={() => setFocused(label)} onBlur={() => setFocused("")} style={{ ...text, fontSize: 16, minHeight: 44, padding: 12, borderWidth: 1, borderColor: focused === label ? colors.accent : colors.border, borderRadius: 8 }} />;
   }
-  return <View style={{ gap: 12, paddingTop: 24, borderTopWidth: 1, borderTopColor: colors.border }}>
+  return <View nativeID="pasear-logs-panel" style={{ display: active ? "flex" : "none", gap: 16 }}>
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
       <Text accessibilityRole="header" style={{ ...text, fontWeight: "600" }}>통신 로그</Text>
-      <Action colors={colors} quiet expanded={expanded} label={expanded ? "로그 접기" : "로그 열기"} onPress={() => setExpanded(!expanded)} />
     </View>
     <Text accessibilityLiveRegion="polite" style={muted}>{state.data ? `${state.data.enabled ? "수집 중" : "수집 안 함"} · ${size(state.data.storedBytes)} · 최근 ${state.data.retentionDays}일, 최대 ${size(state.data.maxBytes)}` : state.isError ? "기록 상태를 확인하지 못했습니다." : "기록 상태를 불러오는 중…"}</Text>
     <View accessibilityRole="radiogroup" accessibilityLabel="로그 수집" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -100,14 +113,15 @@ export function Logs({ colors, hostId }: { colors: Colors; hostId: string }) {
     {state.data?.enabled === false ? <Text style={muted}>새 요청·응답과 호출 이력을 수집하지 않습니다. 기존 로그는 유지되며 전체 로그 삭제로 지울 수 있습니다.</Text> : null}
     {state.data?.error ? <Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>{state.data.error}</Text> : null}
     {state.data?.dropped ? <Text style={{ ...muted, color: colors.statusDanger }}>이번 실행에서 {state.data.dropped}건을 저장하지 못했습니다. 저장 오류 또는 기록량 제한을 확인하세요.</Text> : null}
-    {expanded ? <View style={{ gap: 16 }}>
+    <View style={{ gap: 16 }}>
       <Text style={muted}>MCP 요청·응답을 이 호스트에 저장합니다. 인증 헤더·OAuth 본문은 기록하지 않으며, 알려진 인증 값과 비밀키 필드를 가립니다. 본문에는 작업 내용이 포함됩니다. 응답이 1MB를 넘으면 본문 생략 표시를 남깁니다.</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        <Action colors={colors} label="로그 새로고침" disabled={pending || rows.isFetching} onPress={() => { setSelected(null); void cache.resetQueries({ queryKey: ["pasear-logs", hostId] }); void state.refetch(); }} />
+        <Action colors={colors} label="로그 새로고침" disabled={pending || rows.isFetching} onPress={refresh} />
       </View>
       <View style={{ gap: 8 }}>{input("연결 이름 또는 ID로 필터", connection, setConnection)}{input("도구 이름으로 필터", tool, setTool)}</View>
       {rows.isPending ? <Text style={muted}>로그를 불러오는 중…</Text> : rows.isError ? <View style={{ gap: 8 }}><Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>로그를 불러오지 못했습니다. 로그 새로고침으로 다시 시도하세요.</Text></View>
         : !entries.length ? <Text style={muted}>{filters.connection || filters.tool ? "조건에 맞는 로그가 없습니다." : "저장된 MCP 통신 기록이 없습니다."}</Text> : null}
+      {pager("상단")}
       {entries.map((row) => <View key={row.id} style={{ gap: 8, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Text style={{ ...text, fontWeight: "600" }}>{row.tool || row.method || `${row.httpMethod} ${row.path}`} · {outcomes[row.outcome]}</Text>
         <Text style={muted}>{new Date(row.at).toLocaleString()} · {row.durationMs}ms</Text>
@@ -115,7 +129,7 @@ export function Logs({ colors, hostId }: { colors: Colors; hostId: string }) {
         <View style={{ alignItems: "flex-start" }}><Action colors={colors} quiet label={selected === row.id ? "상세 닫기" : `상세 보기 ${row.id.slice(0, 8)}`} expanded={selected === row.id} onPress={() => setSelected(selected === row.id ? null : row.id)} /></View>
         {selected === row.id ? <Detail key={row.id} id={row.id} hostId={hostId} colors={colors} /> : null}
       </View>)}
-      {rows.hasNextPage ? <Action colors={colors} label={rows.isFetchingNextPage ? "불러오는 중…" : "이전 로그 더 보기"} disabled={pending || rows.isFetchingNextPage} onPress={() => { void rows.fetchNextPage(); }} /> : null}
+      {entries.length > 5 ? pager("하단") : null}
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {Platform.OS === "web" ? <Action colors={colors} label={pending && action.variables === "export" ? "내려받는 중…" : "조회한 로그 내려받기"} disabled={pending || !entries.length} onPress={() => action.mutate("export")} /> : null}
         <Action colors={colors} label="전체 로그 삭제" disabled={pending || !state.data?.storedBytes} onPress={() => setConfirmDelete(true)} />
@@ -124,7 +138,7 @@ export function Logs({ colors, hostId }: { colors: Colors; hostId: string }) {
       {confirmDelete ? <View style={{ gap: 8 }}><Text style={text}>이 호스트에 저장된 모든 로그를 삭제합니다. 현재 필터와 관계없이 삭제하며 복구할 수 없습니다.</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         <Action colors={colors} label="모든 로그 삭제 확인" disabled={pending} onPress={() => action.mutate("clear")} /><Action colors={colors} label="삭제 취소" disabled={pending} onPress={() => setConfirmDelete(false)} />
       </View></View> : null}
-    </View> : null}
+    </View>
     {state.isError ? <Action colors={colors} label="로그 상태 다시 불러오기" onPress={() => { void state.refetch(); }} /> : null}
     {action.error ? <Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>{action.error instanceof Error ? action.error.message : "처리하지 못했습니다. 다시 시도하세요."}</Text> : null}
     {notice ? <Text accessibilityLiveRegion="polite" style={muted}>{notice}</Text> : null}

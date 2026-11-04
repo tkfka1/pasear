@@ -1,6 +1,6 @@
 import { useRpc } from "@getpaseo/plugin/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { getConnections, decideConnection, revokeConnection, type AccessRule, type RpcInput } from "../shared/mcp";
 import { hasControl } from "../shared/auth.js";
@@ -32,8 +32,8 @@ function Approval({ request, colors, hostLabel, hostId, pending, onDecide }: {
   </View>;
 }
 
-// Requests stay on the main page even while another disclosure is open.
-export function Connections({ colors, hostId, hostLabel, expanded }: { colors: Colors; hostId: string; hostLabel: string; expanded: boolean }) {
+// Keep polling while the connection panel is hidden so its tab can show pending approvals.
+export function Connections({ colors, hostId, hostLabel, expanded, onPendingChange }: { colors: Colors; hostId: string; hostLabel: string; expanded: boolean; onPendingChange?(count: number): void }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const statusRpc = useRpc(getConnections), decideRpc = useRpc(decideConnection), revokeRpc = useRpc(revokeConnection);
@@ -46,6 +46,7 @@ export function Connections({ colors, hostId, hostLabel, expanded }: { colors: C
   const text = { color: colors.foreground, fontSize: 14, lineHeight: 22 };
   const muted = { color: colors.foregroundMuted, fontSize: 13, lineHeight: 21 };
   const requests = state.data?.pending ?? [];
+  useEffect(() => { onPendingChange?.(requests.length); }, [requests.length, onPendingChange]);
   if (!expanded && !requests.length && !action.error) return null;
   return <View style={{ gap: 12 }}>
     {requests.length ? <View>

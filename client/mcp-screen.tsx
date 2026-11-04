@@ -1,7 +1,7 @@
 import type { PluginScreenProps } from "@getpaseo/plugin/client";
 import { useRpc, useSettings } from "@getpaseo/plugin/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { configSchema, preferences, getStatus, startServer, stopServer, generateConnectionKey } from "../shared/mcp";
 import { Action } from "./controls";
@@ -25,6 +25,11 @@ function Page({ theme, layout, host }: PluginScreenProps) {
   const [focused, setFocused] = useState("");
   const [editing, setEditing] = useState(false);
   const [advanced, setAdvanced] = useState(false);
+  const [tab, setTab] = useState<"connection" | "logs">("connection");
+  const [pendingConnections, setPendingConnections] = useState(0);
+  const scroll = useRef<ScrollView>(null);
+  function top() { scroll.current?.scrollTo({ y: 0, animated: false }); }
+  function selectTab(next: "connection" | "logs") { setTab(next); top(); }
   const running = status.data?.running === true;
   useEffect(() => {
     if (settings.status === "ready" && !dirty) setDraft({ ...settings.values, port: String(settings.values.port), revision: settings.revision });
@@ -80,14 +85,26 @@ function Page({ theme, layout, host }: PluginScreenProps) {
     setDraft({ ...saved, port: String(saved.port), revision });
     setDirty(false); setEditing(false); action.reset(); setNotice("");
   }
-  return <ScrollView style={{ flex: 1, backgroundColor: colors.surface0 }} keyboardShouldPersistTaps="handled"
+  return <ScrollView ref={scroll} style={{ flex: 1, backgroundColor: colors.surface0 }} keyboardShouldPersistTaps="handled"
     contentContainerStyle={{ paddingHorizontal: layout.compact ? 20 : 40, paddingVertical: layout.compact ? 28 : 48 }}>
     <View nativeID="pasear-main" style={{ width: "100%", maxWidth: 600, alignSelf: "center", gap: 32, paddingBottom: 32 }}>
       <View style={{ gap: 6 }}>
         <Text accessibilityRole="header" style={{ color: colors.foreground, fontSize: 26, lineHeight: 34, fontWeight: "600", letterSpacing: -0.6 }}>pasear</Text>
         <Text style={muted}>웹 채팅에서 Paseo 제어</Text>
       </View>
-      <View style={{ gap: 24, paddingTop: 24, borderTopWidth: 1, borderTopColor: colors.border }}>
+      <View accessibilityRole="tablist" accessibilityLabel="pasear 메뉴" style={{ flexDirection: "row", borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        {([["connection", "연결"], ["logs", "로그"]] as const).map(([id, title]) => <Pressable key={id} accessibilityRole="tab" accessibilityLabel={title}
+          accessibilityState={{ selected: tab === id }} aria-selected={tab === id} onPress={() => selectTab(id)}
+          onFocus={() => setFocused(`tab:${id}`)} onBlur={() => setFocused("")}
+          style={({ pressed }) => ({ minHeight: 44, paddingHorizontal: 20, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 8,
+            borderBottomWidth: 2, borderBottomColor: tab === id || focused === `tab:${id}` ? colors.accent : "transparent", backgroundColor: pressed ? colors.surface1 : "transparent" })}>
+          <Text style={{ ...text, color: tab === id ? colors.foreground : colors.foregroundMuted, fontWeight: tab === id ? "600" : "400" }}>{title}</Text>
+          {id === "connection" && pendingConnections > 0 ? <Text accessibilityLabel={`승인 대기 ${pendingConnections}건`} style={{ ...muted, color: colors.accent }}>{pendingConnections}</Text> : null}
+        </Pressable>)}
+      </View>
+      {tab === "logs" && pendingConnections > 0 ? <Action colors={colors} label={`연결 승인 요청 ${pendingConnections}건 보기`} onPress={() => selectTab("connection")} /> : null}
+      <View nativeID="pasear-connection-panel" style={{ display: tab === "connection" ? "flex" : "none", gap: 32 }}>
+      <View style={{ gap: 24 }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
           <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -134,9 +151,10 @@ function Page({ theme, layout, host }: PluginScreenProps) {
         {notice ? <Text accessibilityLiveRegion="polite" style={muted}>{notice}</Text> : null}
       </View>
       <View style={{ paddingTop: 24, borderTopWidth: 1, borderTopColor: colors.border }}>
-        <Connections colors={colors} hostId={host.id} hostLabel={host.label} expanded />
+        <Connections colors={colors} hostId={host.id} hostLabel={host.label} expanded onPendingChange={setPendingConnections} />
       </View>
-      <Logs colors={colors} hostId={host.id} />
+      </View>
+      <Logs colors={colors} hostId={host.id} active={tab === "logs"} onNavigate={top} />
     </View>
   </ScrollView>;
 }
