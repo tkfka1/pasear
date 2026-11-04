@@ -58,12 +58,12 @@ async function harness(t, api = {}, cancelAgent, configuredPublicUrl = publicUrl
     }
     return { response, proof, flowUrl, csrf };
   }
-  async function authorize({ workspaceIds = null, extra = {} } = {}) {
+  async function authorize({ workspaceIds = null, accessRules, extra = {} } = {}) {
     const { client } = await register();
     const start = await begin(client, extra);
     assert.equal(start.response.status, 303);
     const pending = store.snapshot().pending.at(-1);
-    store.decide(pending.id, true, workspaceIds);
+    store.decide(pending.id, true, workspaceIds, accessRules);
     const redirect = await request(start.flowUrl);
     const url = new URL(redirect.headers.get("location"));
     assert.equal(url.searchParams.get("state"), "roundtrip-state");
@@ -748,4 +748,44 @@ test("key rotation revokes access and refresh; old unverified grants are invalid
   store.data.grants.old = { id: "old", revoked: false, expiresAt: Date.now() / 1000 + 1000 };
   store.persist();
   assert.equal(new OAuthStore(store.file).data.grants.old.revoked, true);
+});
+
+
+for (const accessRules of [
+  [{ kind: "project", id: "p" }],
+  [{ kind: "workspace", id: "w" }],
+  [{ kind: "agent", id: "a", workspaceId: "w" }],
+  [{ kind: "project", id: "p" }, { kind: "workspace", id: "w" }, { kind: "agent", id: "a", workspaceId: "w2" }],
+  [{ kind: "all", id: "*" }],
+]) {
+  test(`initial OAuth consent persists ${accessRules.map((r) => r.kind).join("+")} rules before token issuance`, async (t) => {
+    const h = await harness(t);
+    const { tokens, grant } = await h.authorize({ accessRules });
+    assert.deepEqual(grant.accessRules, accessRules);
+    assert.equal(grant.workspaceIds, null);
+    assert.equal(grant.agentIds, null);
+    assert.equal(grant.accessRevision, 0);
+    const provider = new PaseoOAuthProvider(h.store, publicUrl, connectionKey);
+    const principal = await provider.verifyAccessToken(tokens.access_token);
+    assert.deepEqual(principal.extra.accessRules, accessRules);
+  });
+}
+
+test("invalid initial rules never create a grant, code or token; denial needs no targets", async (t) => {
+  const h = await harness(t);
+  const { client } = await h.register();
+  const start = await h.begin(client);
+  const pending = h.store.snapshot().pending[0];
+  for (const rules of [[], null, [null], [{ kind: "wrong", id: "x" }], [{ kind: "agent", id: "a" }], [{ kind: "all", id: "x" }], Array.from({ length: 101 }, (_, i) => ({ kind: "project", id: String(i) }))]) {
+    assert.throws(() => h.store.decide(pending.id, true, null, rules));
+    assert.equal(h.store.pending.get(pending.id).decision, "pending");
+    assert.deepEqual(h.store.snapshot().connections, []);
+    assert.equal(h.store.codes.size, 0);
+    assert.deepEqual(h.store.data.access, {});
+    assert.deepEqual(h.store.data.refresh, {});
+  }
+  h.store.decide(pending.id, false);
+  const denied = new URL((await h.request(start.flowUrl)).headers.get("location"));
+  assert.equal(denied.searchParams.get("error"), "access_denied");
+  assert.deepEqual(h.store.snapshot().connections, []);
 });

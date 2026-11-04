@@ -1,10 +1,23 @@
+import type { PaseoApi } from "@getpaseo/client";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { McpServerManager } from "./server/manager";
 import { OAuthStore } from "./server/oauth.js";
-import { preferences, getStatus, startServer, stopServer, generateConnectionKey, getConnections, decideConnection, revokeConnection, updateConnectionAccess } from "./shared/mcp";
+import { preferences, getStatus, startServer, stopServer, generateConnectionKey, getConnections, decideConnection, revokeConnection, updateConnectionAccess, type AccessRule } from "./shared/mcp";
+
+async function validateAccessRules(accessRules: AccessRule[], paseo: PaseoApi) {
+  const projects = accessRules.some((r) => r.kind === "project") ? (await paseo.projects.list()).projects : [];
+  for (const rule of accessRules) {
+    if (rule.kind === "project" && !projects.some((p) => p.projectId === rule.id)) throw new Error("프로젝트를 찾지 못했습니다. 목록을 다시 조회하세요.");
+    if (rule.kind === "workspace" && !await paseo.workspaces.ref(rule.id).refresh()) throw new Error("워크스페이스를 찾지 못했습니다. 목록을 다시 조회하세요.");
+    if (rule.kind === "agent") {
+      const agent = paseo.agents.ref(rule.id);
+      if (!await agent.refresh() || agent.current()?.workspaceId !== rule.workspaceId || !await paseo.workspaces.ref(rule.workspaceId).refresh()) throw new Error("에이전트의 워크스페이스가 바뀌었거나 대상을 찾지 못했습니다. 목록을 다시 조회하세요.");
+    }
+  }
+}
 
 export default function contribute(server: PluginServerContext) {
   const settings = server.registerSettings(preferences);
@@ -19,28 +32,21 @@ export default function contribute(server: PluginServerContext) {
   });
   server.handle(stopServer, () => manager.stop());
   server.handle(getConnections, () => oauth.snapshot());
-  server.handle(decideConnection, async ({ id, allow, workspaceIds }, { paseo }) => {
+  server.handle(decideConnection, async ({ id, allow, workspaceIds, accessRules }, { paseo }) => {
     if (!manager.status().running) throw new Error("서버를 시작한 뒤 다시 연결하세요.");
-    if (allow && workspaceIds) {
+    if (allow && accessRules) await validateAccessRules(accessRules, paseo);
+    if (allow && !accessRules && workspaceIds) {
       for (const workspaceId of workspaceIds) {
         if (!await paseo.workspaces.ref(workspaceId).refresh()) throw new Error("워크스페이스를 찾지 못했습니다. 목록을 새로 불러오세요.");
       }
     }
-    oauth.decide(id, allow, workspaceIds);
+    oauth.decide(id, allow, workspaceIds, accessRules);
     return oauth.snapshot();
   });
   server.handle(revokeConnection, ({ id }) => { oauth.revoke(id); return oauth.snapshot(); });
   server.handle(updateConnectionAccess, async ({ id, workspaceIds, agentIds, accessRevision, accessRules }, { paseo }) => {
     if (accessRules) {
-      const projects = accessRules.some((r) => r.kind === "project") ? (await paseo.projects.list()).projects : [];
-      for (const rule of accessRules) {
-        if (rule.kind === "project" && !projects.some((p) => p.projectId === rule.id)) throw new Error("프로젝트를 찾지 못했습니다. 목록을 다시 조회하세요.");
-        if (rule.kind === "workspace" && !await paseo.workspaces.ref(rule.id).refresh()) throw new Error("워크스페이스를 찾지 못했습니다. 목록을 다시 조회하세요.");
-        if (rule.kind === "agent") {
-          const agent = paseo.agents.ref(rule.id);
-          if (!await agent.refresh() || agent.current()?.workspaceId !== rule.workspaceId || !await paseo.workspaces.ref(rule.workspaceId).refresh()) throw new Error("에이전트의 워크스페이스가 바뀌었거나 대상을 찾지 못했습니다. 목록을 다시 조회하세요.");
-        }
-      }
+      await validateAccessRules(accessRules, paseo);
       oauth.updateAccess(id, null, null, accessRevision, accessRules);
       return oauth.snapshot();
     }

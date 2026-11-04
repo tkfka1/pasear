@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import { InvalidClientMetadataError, InvalidGrantError, InvalidScopeError, InvalidTargetError, InvalidTokenError, InvalidRequestError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { authorizationPage, escapeHtml as escape } from "./authorization-page.js";
 import { CONTROL_SCOPES, hasControl } from "../shared/auth.js";
+import { normalizeAccessRules } from "./access-rules.js";
 
 export const SCOPES = CONTROL_SCOPES;
 const digest = (value) => createHash("sha256").update(value).digest("hex");
@@ -82,20 +83,22 @@ export class OAuthStore {
       events: this.events,
     };
   }
-  decide(id, allow, workspaceIds) {
+  decide(id, allow, workspaceIds, accessRules) {
     this.prune();
     const pending = this.pending.get(id);
     if (!pending || pending.decision !== "pending") throw new Error("연결 요청이 만료되었거나 이미 처리되었습니다. 웹 채팅에서 다시 연결하세요.");
     if (!pending.keyHash) throw new Error("연결 비밀키 확인을 먼저 완료하세요.");
     if (!allow) { pending.decision = "denied"; return; }
-    if (workspaceIds !== null && workspaceIds.length === 0) throw new Error("허용할 워크스페이스를 선택하세요.");
+    const rules = accessRules === undefined ? undefined : normalizeAccessRules(accessRules);
+    if (!rules && workspaceIds !== null && (!Array.isArray(workspaceIds) || !workspaceIds.length || workspaceIds.length > 100 || workspaceIds.some((id) => typeof id !== "string" || !id || id.length > 200))) throw new Error("허용할 워크스페이스를 선택하세요.");
     if (Object.values(this.data.grants).filter((g) => !g.revoked && g.expiresAt > now()).length >= 100) throw new Error("연결 수가 너무 많습니다. 사용하지 않는 연결을 해제하세요.");
     const scopes = [...pending.params.scopes];
     if (!hasControl(scopes)) throw new Error("작업 제어 권한이 필요합니다. 웹 채팅에서 모든 권한을 요청해 다시 연결하세요.");
     pending.decision = "approved";
     pending.grant = {
       id: randomUUID(), clientId: pending.clientId, clientName: pending.clientName,
-      scopes, workspaceIds: workspaceIds === null ? null : [...new Set(workspaceIds)], agentIds: null, accessRevision: 0,
+      scopes, workspaceIds: (rules || workspaceIds === null) ? null : [...new Set(workspaceIds)], agentIds: null, accessRevision: 0,
+      ...(rules ? { accessRules: rules } : {}),
       resource: pending.resource, createdAt: now(), expiresAt: now() + 30 * 86400, revoked: false,
       keyHash: pending.keyHash, controlPermissionVersion: 1,
     };
@@ -114,9 +117,7 @@ export class OAuthStore {
       if (ids !== null && (!Array.isArray(ids) || !ids.length || ids.length > 100 || ids.some((id) => typeof id !== "string" || !id || id.length > 200))) throw new Error("허용할 대상을 하나 이상 선택하세요. 최대 100개까지 지정할 수 있습니다.");
     }
     if (accessRules !== undefined) {
-      if (!Array.isArray(accessRules) || !accessRules.length || accessRules.length > 100
-        || accessRules.some((r) => !["all", "project", "workspace", "agent"].includes(r.kind) || typeof r.id !== "string" || !r.id || r.id.length > 200 || (r.kind === "all" && r.id !== "*") || (r.kind === "agent" && (typeof r.workspaceId !== "string" || !r.workspaceId || r.workspaceId.length > 200)))) throw new Error("허용할 프로젝트·워크스페이스·에이전트를 선택하세요. 최대 100개까지 지정할 수 있습니다.");
-      grant.accessRules = [...new Map(accessRules.map((r) => [`${r.kind}:${r.id}`, { ...r }])).values()];
+      grant.accessRules = normalizeAccessRules(accessRules);
       grant.workspaceIds = null;
       grant.agentIds = null;
     } else {

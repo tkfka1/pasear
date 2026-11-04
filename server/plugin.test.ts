@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import contribute from "../index.server";
-import { configSchema } from "../shared/mcp";
+import { configSchema, decideConnection } from "../shared/mcp";
 
 test("plugin load keeps the port closed; start uses the injected SDK; unload closes it", async (t) => {
   const previousHome = process.env.PASEO_HOME;
@@ -57,7 +57,25 @@ test("plugin load keeps the port closed; start uses the injected SDK; unload clo
     const csrf = html.match(/name="csrf" value="([^"]+)"/)![1];
     assert.equal((await form(flowUrl, { csrf, connection_key: config.connectionKey })).status, 303);
     const pending = (await handlers.get("mcp.connections")!({}, context)).pending[0];
-    await handlers.get("mcp.consent")!({ id: pending.id, allow: true, workspaceIds: null }, context);
+    const approve = (patch: object) => handlers.get("mcp.consent")!({ id: pending.id, allow: true, ...patch }, context);
+    for (const patch of [
+      {}, { accessRules: [] }, { accessRules: [{ kind: "project", id: "missing" }] },
+      { accessRules: [{ kind: "workspace", id: "missing" }] },
+      { accessRules: [{ kind: "agent", id: "allowed-agent", workspaceId: "outside" }] },
+      { accessRules: [{ kind: "agent", id: "missing-agent", workspaceId: "allowed" }] },
+    ]) {
+      await assert.rejects(approve(patch));
+      const state = await handlers.get("mcp.connections")!({}, context);
+      assert.equal(state.pending[0].id, pending.id);
+      assert.deepEqual(state.connections, []);
+      const waiting = await request(flowUrl);
+      assert.equal(waiting.headers.get("location"), null, "invalid approval must not issue an authorization code");
+    }
+    const approvedRules = [{ kind: "all", id: "*" }];
+    await approve({ accessRules: approvedRules });
+    const initial = (await handlers.get("mcp.connections")!({}, context)).connections[0];
+    assert.deepEqual(initial.accessRules, approvedRules);
+    assert.equal(initial.accessRevision, 0);
     const code = new URL((await request(flowUrl)).headers.get("location")!).searchParams.get("code")!;
     const tokens = await (await form("/token", { grant_type: "authorization_code", client_id: client.client_id, code, code_verifier: verifier, redirect_uri: "https://client.example/callback" })).json() as any;
     assert.ok(tokens.access_token);
@@ -173,4 +191,15 @@ test("two host installations keep listeners, SDK calls and OAuth connections ind
   assert.equal((await a.list(tokenA)).status, 401);
   assert.equal((await b.list(tokenB)).status, 200);
   assert.deepEqual((await b.rpc("mcp.connections")).connections, beforeB.connections);
+});
+
+
+test("initial consent RPC requires an explicit nonempty target and preserves legacy clients", () => {
+  for (const invalid of [{}, { workspaceIds: [] }, { accessRules: [] }, { accessRules: [{ kind: "all", id: "wrong" }] }, { accessRules: [{ kind: "agent", id: "a" }] }]) {
+    assert.equal(decideConnection.input.safeParse({ id: "request", allow: true, ...invalid }).success, false);
+  }
+  for (const valid of [{ workspaceIds: null }, { workspaceIds: ["w"] }, { accessRules: [{ kind: "project", id: "p" }] }]) {
+    assert.equal(decideConnection.input.safeParse({ id: "request", allow: true, ...valid }).success, true);
+  }
+  assert.equal(decideConnection.input.safeParse({ id: "request", allow: false }).success, true);
 });

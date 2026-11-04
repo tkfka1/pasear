@@ -53,7 +53,16 @@ export const connectionsSchema = z.object({
   events: z.array(z.object({ at: z.string(), connectionId: z.string(), tool: z.string(), outcome: z.string() })),
 });
 export const getConnections = defineRpc({ name: "mcp.connections", input: z.object({}), output: connectionsSchema });
-export const decideConnection = defineRpc({ name: "mcp.consent", input: z.object({ id: z.string(), allow: z.boolean(), workspaceIds: z.array(z.string().min(1)).max(100).nullable() }), output: connectionsSchema });
+export const decideConnection = defineRpc({ name: "mcp.consent", input: z.object({
+  id: z.string(), allow: z.boolean(),
+  // Older app bundles can still submit explicit workspace-only approvals.
+  workspaceIds: z.array(accessId).max(100).nullable().optional(),
+  accessRules: z.array(accessRuleSchema).min(1).max(100).optional(),
+}).superRefine((input, ctx) => {
+  if (input.allow && input.accessRules === undefined && (input.workspaceIds === undefined || input.workspaceIds?.length === 0)) {
+    ctx.addIssue({ code: "custom", message: "허용할 항목을 하나 이상 선택하세요." });
+  }
+}), output: connectionsSchema });
 export const revokeConnection = defineRpc({ name: "mcp.revoke", input: z.object({ id: z.string() }), output: connectionsSchema });
 export const updateConnectionAccess = defineRpc({ name: "mcp.access", input: z.object({
   id: z.string(), accessRevision: z.number().int().nonnegative(),
