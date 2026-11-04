@@ -3,6 +3,8 @@ import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { McpServerManager } from "./server/manager";
+import { TrafficLog } from "./server/traffic-log.js";
+import { getLogStatus, configureLogs, clearLogs, listLogs, getLogDetail, exportLogs } from "./shared/logs";
 import { OAuthStore } from "./server/oauth.js";
 import { preferences, getStatus, startServer, stopServer, generateConnectionKey, getConnections, decideConnection, revokeConnection, updateConnectionAccess, type AccessRule } from "./shared/mcp";
 
@@ -21,7 +23,14 @@ async function validateAccessRules(accessRules: AccessRule[], paseo: PluginHandl
 export default function contribute(server: PluginServerContext) {
   const settings = server.registerSettings(preferences);
   const oauth = new OAuthStore(join(process.env.PASEO_HOME || join(homedir(), ".paseo"), "plugin-data", "paseo-mcp-plugin", "oauth.json"));
-  const manager = new McpServerManager(oauth);
+  const traffic = new TrafficLog(join(process.env.PASEO_HOME || join(homedir(), ".paseo"), "plugin-data", "paseo-mcp-plugin", "logs"));
+  const manager = new McpServerManager(oauth, traffic);
+  server.handle(getLogStatus, () => traffic.status());
+  server.handle(configureLogs, ({ enabled }) => traffic.configure(enabled));
+  server.handle(clearLogs, () => traffic.clear());
+  server.handle(listLogs, (input) => traffic.list(input));
+  server.handle(getLogDetail, ({ id }) => traffic.detail(id));
+  server.handle(exportLogs, (input) => traffic.exportPage(input));
   server.handle(getStatus, () => manager.status());
   server.handle(generateConnectionKey, () => ({ connectionKey: randomBytes(32).toString("hex") }));
   server.handle(startServer, async (_input, { paseo }) => {
@@ -62,5 +71,5 @@ export default function contribute(server: PluginServerContext) {
   });
   const unsubscribe = settings.subscribe((state) => manager.reconcile(state.status === "ready" ? state.values : null));
   // Loading a plugin never opens a network port. Only mcp.start does.
-  return async () => { unsubscribe(); await manager.stop(); };
+  return async () => { unsubscribe(); await manager.stop(); await traffic.close(); };
 }

@@ -6,6 +6,7 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { configSchema, preferences, getStatus, startServer, stopServer, generateConnectionKey } from "../shared/mcp";
 import { Action } from "./controls";
 import { ConnectionDetails } from "./connection-screen";
+import { Logs } from "./logs";
 import { Connections } from "./connections";
 
 type Draft = { host: "127.0.0.1" | "0.0.0.0"; port: string; connectionKey: string; publicUrl: string; revision: string };
@@ -135,6 +136,7 @@ function Page({ theme, layout, host }: PluginScreenProps) {
       <View style={{ paddingTop: 24, borderTopWidth: 1, borderTopColor: colors.border }}>
         <Connections colors={colors} hostId={host.id} hostLabel={host.label} expanded />
       </View>
+      <Logs colors={colors} hostId={host.id} />
     </View>
   </ScrollView>;
 }

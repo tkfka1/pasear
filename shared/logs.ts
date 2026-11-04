@@ -1,0 +1,13 @@
+import { defineRpc } from "@getpaseo/plugin";
+import { z } from "zod";
+const id = z.string().uuid();
+const filters = { connection: z.string().min(1).max(200).optional(), connectionId: id.optional(), tool: z.string().min(1).max(200).optional() };
+const logState = z.object({ enabled: z.boolean(), retentionDays: z.number(), maxBytes: z.number(), storedBytes: z.number(), dropped: z.number(), error: z.string().nullable() });
+const summary = z.object({ id, at: z.string(), finishedAt: z.string(), durationMs: z.number(), connectionId: z.string().nullable(), clientName: z.string().nullable(), httpMethod: z.string(), path: z.string(), status: z.number(), outcome: z.enum(["ok", "error", "unauthorized", "aborted"]), method: z.string().nullable(), tool: z.string().nullable() });
+export type LogSummary = z.infer<typeof summary>;
+export const getLogStatus = defineRpc({ name: "mcp.logs.status", input: z.object({}), output: logState });
+export const configureLogs = defineRpc({ name: "mcp.logs.configure", input: z.object({ enabled: z.boolean() }), output: logState });
+export const clearLogs = defineRpc({ name: "mcp.logs.clear", input: z.object({}), output: logState });
+export const listLogs = defineRpc({ name: "mcp.logs.list", input: z.object({ ...filters, before: id.optional(), limit: z.number().int().min(1).max(50).default(25) }), output: z.object({ entries: z.array(summary), nextCursor: id.nullable() }) });
+export const getLogDetail = defineRpc({ name: "mcp.logs.detail", input: z.object({ id }), output: summary.extend({ request: z.unknown(), response: z.unknown() }) });
+export const exportLogs = defineRpc({ name: "mcp.logs.export", input: z.object({ ...filters, cursor: id.optional() }), output: z.object({ content: z.string(), nextCursor: id.nullable() }) });

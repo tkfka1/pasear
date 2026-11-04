@@ -3,12 +3,13 @@ import type { PluginHandlerContext } from "@getpaseo/plugin/server";
 import type { McpConfig, McpStatus } from "../shared/mcp";
 import { configSchema } from "../shared/mcp";
 import { createApp } from "./app.js";
+import { TrafficLog } from "./traffic-log.js";
 import { OAuthStore } from "./oauth.js";
 import { stopAgent } from "./stop-agent";
 import { createNativeImporter } from "./import-agent";
 
 export class McpServerManager {
-  constructor(readonly oauth = new OAuthStore()) {}
+  constructor(readonly oauth = new OAuthStore(), readonly trafficLog?: TrafficLog) {}
   private listener: Server | null = null;
   private active: McpConfig | null = null;
   private startedAt: string | null = null;
@@ -39,7 +40,8 @@ export class McpServerManager {
         if (this.active && this.sameListener(this.active, config)) return this.status();
         throw new Error("실행 중인 서버를 중지한 뒤 수신 설정을 변경하세요.");
       }
-      const app = createApp({ ...config, oauthStore: this.oauth, connection: { getApi: async () => paseo }, cancelAgent: stopAgent, importAgent: this.importAgent });
+      await this.trafficLog?.ready;
+      const app = createApp({ ...config, trafficLog: this.trafficLog, oauthStore: this.oauth, connection: { getApi: async () => paseo }, cancelAgent: stopAgent, importAgent: this.importAgent });
       const listener = app.listen(config.port, config.host);
       try {
         await new Promise<void>((resolve, reject) => {

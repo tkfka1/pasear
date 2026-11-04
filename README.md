@@ -15,7 +15,7 @@ Web chat → your HTTPS proxy → pasear MCP server → Paseo → coding agents
 Requires Paseo daemon and client **0.11.2 or later**, npm, and the local `paseo` CLI for stopping runs and importing native sessions.
 
 ```bash
-paseo plugin add git:tkfka1/pasear --ref v0.11.2
+paseo plugin add git:tkfka1/pasear --ref v0.12.0
 ```
 
 Paseo installs the locked runtime dependencies with `npm ci --omit=dev --ignore-scripts`. The installed plugin ID remains `paseo-mcp-plugin`; the display name is **pasear**. The interface is currently in Korean.
@@ -71,6 +71,14 @@ Each connection has one task-control permission, limited to the projects, worksp
 Install pasear independently on each host. Each needs its own public URL and chat connector. Changing the host in the Paseo screen does not retarget a connected chat, and the load balancer must not distribute requests across unrelated hosts.
 
 Prompts and selected history go to the chat service and selected coding provider. OAuth state stays on the daemon host. Tool activity omits raw tool arguments/output and reasoning; conversation text may contain sensitive task data. This plugin is trusted local code and uses OAuth DCR, S256 PKCE, a connection key, and explicit owner approval.
+
+## MCP traffic logs
+
+Open **통신 로그 → 로그 열기** on the main screen to inspect request/response bodies, filter by connection name/ID or tool name, toggle recording, refresh, or delete all logs. Web clients can download one record or all matching records as JSONL; native apps can share individual records. Deletion affects all filters and prevents already-running requests from recreating erased records. Recording changes apply without restarting MCP.
+
+Recording starts enabled and persists under `$PASEO_HOME/plugin-data/paseo-mcp-plugin/logs/` with `0700` directories and `0600` files. Files rotate at 4 MiB with a 7-day, 50 MiB retention limit. Preferences and logs survive reloads. Disk errors and queue-pressure drops appear in the management UI; logging failures do not fail MCP operations.
+
+Both MCP endpoints record initialization, discovery, calls, notifications and errors, including bodies, connection identifiers, timestamps, duration and HTTP status. OAuth routes, headers, cookies and URL queries are excluded; unauthenticated requests have metadata only. Known connection keys, the request's Bearer token, and credential-named fields are redacted, including nested JSON text. Arbitrary secrets embedded in task text cannot all be detected; at-rest encryption is separate. Responses exceeding 1 MiB get a `body_size_limit` marker, and excessive nesting/complexity gets a `structure_limit` marker. The screen previews 32,000 characters per body; exports contain the complete stored record. Logs are accessible only through authenticated Paseo management RPCs, never external MCP tools. They do not capture the chat service's entire conversation.
 
 ## Develop and verify
 

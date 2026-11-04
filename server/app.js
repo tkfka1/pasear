@@ -1,10 +1,11 @@
 import express from "express";
+import { captureTraffic } from "./traffic-http.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpServer } from "./tools.js";
 import { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { PaseoOAuthProvider, SCOPES } from "./oauth.js";
 
-export function createApp({ connectionKey, connection, oauthStore, publicUrl, cancelAgent, importAgent }) {
+export function createApp({ connectionKey, connection, oauthStore, publicUrl, cancelAgent, importAgent, trafficLog }) {
   const app = express();
   // Serialize the entire native preflight/import/receipt flow across HTTP
   // requests for this installation, including calls from different chats.
@@ -22,6 +23,7 @@ export function createApp({ connectionKey, connection, oauthStore, publicUrl, ca
   const mcpPaths = ["/", "/mcp"];
   const oauth = new PaseoOAuthProvider(oauthStore, publicUrl, connectionKey);
   app.use((_req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
+  app.use(captureTraffic(trafficLog, connectionKey));
   app.get("/oauth/flow/:id", (req, res) => oauth.flow(req.params.id, res));
   app.post("/oauth/flow/:id", express.urlencoded({ extended: false, limit: "2kb", parameterLimit: 3 }), (req, res) => {
     oauth.admit(req.params.id, req.body, req.get("origin"), res);
@@ -46,7 +48,7 @@ export function createApp({ connectionKey, connection, oauthStore, publicUrl, ca
       }
       throw new Error("Unauthorized");
     };
-    try { req.principal = await principal(); req.getPrincipal = principal; }
+    try { req.principal = await principal(); req.getPrincipal = principal; req.logClientName = oauthStore.data.grants[req.principal.connectionId]?.clientName ?? null; }
     catch {
       res.set("WWW-Authenticate", `Bearer resource_metadata="${getOAuthProtectedResourceMetadataUrl(resourceUrl)}", scope="${SCOPES.join(" ")}"`);
       res.status(401).json({ error: "Unauthorized" });
