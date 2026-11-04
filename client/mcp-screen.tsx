@@ -101,7 +101,7 @@ function Page({ theme, layout, host }: PluginScreenProps) {
         {status.isError ? <Action colors={colors} label="다시 확인" onPress={() => { void status.refetch(); }} /> : null}
         {showSettings ? <View nativeID="pasear-settings" style={{ gap: 12 }}>
           <Text style={label}>공개 MCP 주소</Text>
-          {input("공개 MCP 주소", draft.publicUrl, (publicUrl) => change({ publicUrl }), "https://mcp.example.com/mcp")}
+          {input("공개 MCP 주소", draft.publicUrl, (publicUrl) => change({ publicUrl }), "https://mcp.example.com")}
           <View style={{ alignItems: "flex-start" }}><Action colors={colors} quiet label={advanced ? "고급 설정 접기" : "고급 설정"} expanded={advanced} onPress={() => setAdvanced(!advanced)} /></View>
           {advanced ? <View style={{ gap: 16, paddingVertical: 8 }}>
             <View style={{ gap: 8 }}><Text style={label}>수신 포트</Text>{input("수신 포트", draft.port, (port) => change({ port }))}</View>

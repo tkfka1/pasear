@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { once } from "node:events";
+import { createServer, request as httpRequest } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
 import { mkdtempSync, readFileSync, statSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,12 +17,29 @@ const pkce = () => {
 };
 
 const connectionKey = "a".repeat(64);
-async function harness(t, api = {}, cancelAgent) {
+async function harness(t, api = {}, cancelAgent, configuredPublicUrl = publicUrl, throughProxy = false) {
+  const publicUrl = configuredPublicUrl;
   const store = new OAuthStore();
   const listener = createApp({ connectionKey, publicUrl, oauthStore: store, connection: { getApi: async () => api }, cancelAgent }).listen(0, "127.0.0.1");
   await once(listener, "listening");
   t.after(() => { listener.closeAllConnections(); return new Promise((resolve) => listener.close(resolve)); });
-  const base = `http://127.0.0.1:${listener.address().port}`;
+  const proxyRequests = [];
+  let port = listener.address().port;
+  if (throughProxy) {
+    const upstreamPort = port;
+    const proxy = createServer((req, res) => {
+      proxyRequests.push(req.url.split("?")[0]);
+      const upstream = httpRequest({ hostname: "127.0.0.1", port: upstreamPort, path: req.url, method: req.method,
+        headers: { ...req.headers, host: new URL(publicUrl).host, "x-forwarded-proto": "https" },
+      }, (response) => { res.writeHead(response.statusCode, response.headers); response.pipe(res); });
+      upstream.on("error", () => { res.writeHead(502); res.end(); });
+      req.pipe(upstream);
+    }).listen(0, "127.0.0.1");
+    await once(proxy, "listening");
+    t.after(() => { proxy.closeAllConnections(); return new Promise((resolve) => proxy.close(resolve)); });
+    port = proxy.address().port;
+  }
+  const base = `http://127.0.0.1:${port}`;
   const request = (path, options) => fetch(new URL(new URL(path, base).pathname + new URL(path, base).search, base), { redirect: "manual", ...options });
   const form = (path, params) => request(path, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", origin: new URL(publicUrl).origin }, body: new URLSearchParams(params) });
   async function register(extra = {}) {
@@ -49,18 +67,83 @@ async function harness(t, api = {}, cancelAgent) {
     const redirect = await request(start.flowUrl);
     const url = new URL(redirect.headers.get("location"));
     assert.equal(url.searchParams.get("state"), "roundtrip-state");
-    const params = { client_id: client.client_id, grant_type: "authorization_code", code: url.searchParams.get("code"), code_verifier: start.proof.verifier, redirect_uri: redirectUri, resource: publicUrl };
+    const params = { client_id: client.client_id, grant_type: "authorization_code", code: url.searchParams.get("code"), code_verifier: start.proof.verifier, redirect_uri: redirectUri, resource: extra.resource ?? publicUrl };
     const response = await form("/token", params);
     assert.equal(response.status, 200);
     return { client, params, tokens: await response.json(), grant: store.snapshot().connections.at(-1) };
   }
-  async function call(token, name, args = {}) {
-    const response = await request("/mcp", { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${token}` },
+  async function call(token, name, args = {}, path = "/mcp") {
+    const response = await request(path, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${token}` },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: name === "tools/list" ? name : "tools/call", params: name === "tools/list" ? {} : { name, arguments: args } }) });
     return { status: response.status, body: await response.json() };
   }
-  return { store, request, form, register, begin, authorize, call };
+  return { store, request, form, register, begin, authorize, call, proxyRequests };
 }
+
+for (const configuredPublicUrl of ["https://paseo.example", "https://paseo.example/", publicUrl]) {
+  test(`root and /mcp share authenticated MCP and OAuth discovery for ${configuredPublicUrl}`, async (t) => {
+    const h = await harness(t, {}, undefined, configuredPublicUrl, true);
+    for (const path of ["/", "/mcp"]) {
+      const unauthorized = await h.request(path, { method: "POST", headers: { "content-type": "application/json" }, body: "not JSON" });
+      assert.equal(unauthorized.status, 401);
+      assert.equal(unauthorized.headers.get("location"), null);
+      const metadataUrl = unauthorized.headers.get("www-authenticate").match(/resource_metadata="([^"]+)"/)[1];
+      const metadata = await (await h.request(metadataUrl)).json();
+      assert.equal(metadata.resource, new URL(configuredPublicUrl).href);
+      assert.deepEqual(metadata.authorization_servers, ["https://paseo.example/"]);
+    }
+    for (const path of ["/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"]) {
+      assert.equal((await (await h.request(path)).json()).resource, new URL(configuredPublicUrl).href);
+    }
+    const metadata = await (await h.request("/.well-known/oauth-authorization-server")).json();
+    assert.equal(metadata.authorization_endpoint, "https://paseo.example/authorize");
+    assert.equal(metadata.token_endpoint, "https://paseo.example/token");
+    assert.equal((await h.request("/unknown")).status, 404);
+    assert.equal((await h.request("/mcp/unknown")).status, 404);
+
+    for (const resource of ["https://paseo.example/", publicUrl]) {
+      const { tokens, client, grant } = await h.authorize({ extra: { resource } });
+      assert.equal(h.store.data.grants[grant.id].resource, resource);
+      for (const path of ["/", "/mcp"]) {
+        const response = await h.request(path, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${tokens.access_token}` }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "root-test", version: "1" } } }) });
+        assert.equal(response.status, 200);
+        assert.ok((await response.json()).result.serverInfo);
+        assert.equal((await h.call(tokens.access_token, "tools/list", {}, path)).body.result.tools.length, 9);
+        const unsupported = await h.request(path, { headers: { authorization: `Bearer ${tokens.access_token}` } });
+        assert.equal(unsupported.status, 405);
+        assert.equal(unsupported.headers.get("allow"), "POST");
+      }
+      const mismatch = await h.form("/token", { grant_type: "refresh_token", client_id: client.client_id, refresh_token: tokens.refresh_token, resource: resource === publicUrl ? "https://paseo.example/" : publicUrl });
+      assert.equal(mismatch.status, 400);
+      const refresh = await h.form("/token", { grant_type: "refresh_token", client_id: client.client_id, refresh_token: tokens.refresh_token, resource });
+      assert.equal(refresh.status, 200);
+      const renewed = await refresh.json();
+      h.store.revoke(grant.id);
+      for (const path of ["/", "/mcp"]) assert.equal((await h.call(renewed.access_token, "tools/list", {}, path)).status, 401);
+    }
+    const { client } = await h.register();
+    for (const resource of ["https://other.example/", "https://paseo.example/unrelated"]) {
+      const denied = await h.begin(client, { resource });
+      assert.equal(new URL(denied.response.headers.get("location")).searchParams.get("error"), "invalid_target");
+    }
+    for (const path of ["/", "/mcp", "/register", "/authorize", "/token", "/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource"]) assert.ok(h.proxyRequests.includes(path));
+    assert.ok(h.proxyRequests.some((path) => path.startsWith("/oauth/flow/")));
+  });
+}
+
+test("switching the configured path preserves existing grant audiences, scope and refresh tokens", async (t) => {
+  const h = await harness(t);
+  const { tokens, client, grant } = await h.authorize({ workspaceIds: ["allowed"] });
+  const before = JSON.stringify(h.store.data);
+  const rootProvider = new PaseoOAuthProvider(h.store, "https://paseo.example", connectionKey);
+  assert.equal(JSON.stringify(h.store.data), before);
+  const info = await rootProvider.verifyAccessToken(tokens.access_token);
+  assert.equal(info.resource.href, publicUrl);
+  assert.deepEqual(info.extra.workspaceIds, ["allowed"]);
+  const renewed = await rootProvider.exchangeRefreshToken(client, tokens.refresh_token, undefined, new URL(publicUrl));
+  assert.equal((await h.call(renewed.access_token, "tools/list", {}, "/")).status, 200);
+  assert.equal(h.store.data.grants[grant.id].resource, publicUrl);
+});
 
 test("OAuth discovery advertises the configured HTTPS resource behind a proxy", async (t) => {
   const h = await harness(t);

@@ -19,14 +19,14 @@ OAuth 메타데이터·DCR·PKCE·토큰 갱신·연결 해제를 구현했습�
 ## 서버 시작
 
 ```bash
-paseo plugin add git:tkfka1/pasear --ref v0.10.1
+paseo plugin add git:tkfka1/pasear --ref v0.10.2
 ```
 
 Paseo 데몬·클라이언트 0.11.2 이상과 이미 활성화된 플러그인 기능이 필요합니다. 실행 취소에는 데몬 호스트의 `paseo` CLI도 필요합니다.
 
 1. 사이드바의 **pasear**를 엽니다.
 2. 기본 수신 주소는 `0.0.0.0:8787`로 네트워크에서 연결할 수 있습니다. 같은 호스트의 프록시만 허용하려면 고급 설정에서 `127.0.0.1`을 선택합니다. 이미 저장한 주소는 업데이트해도 유지됩니다.
-3. 공개 MCP 주소를 `https://도메인/mcp` 형식으로 입력합니다. OAuth가 알리는 주소이므로 LB를 직접 구성해도 필수입니다.
+3. 공개 MCP 주소를 `https://도메인` 형식으로 입력합니다. 웹 채팅에도 같은 주소를 등록합니다. 기존 `/mcp` 주소와 승인된 연결도 계속 사용할 수 있습니다. OAuth가 알리는 주소이므로 LB를 직접 구성해도 필수입니다.
 4. 처음에는 **저장하고 켜기**, 이후에는 **서버 켜기**를 누릅니다. 시작 시 키가 없으면 생성합니다.
 5. LB를 설정하고 웹 채팅에서 OAuth 연결을 시작합니다. 열린 브라우저에 **연결 비밀키**를 입력한 뒤 Paseo에서 승인합니다.
 
@@ -44,7 +44,7 @@ A에서 서버를 켠 뒤 B로 전환해도 A 서버는 계속 실행됩니다. 
 
 ## LB 설정
 
-OAuth에는 `/mcp` 외에도 인증·메타데이터 경로가 필요합니다. 전용 MCP 도메인이라면 모든 경로를 플러그인 포트로 전달하는 구성이 간단합니다. TLS 인증서와 도메인은 사용자 환경에서 설정합니다.
+MCP 요청은 루트(`/`)와 기존 `/mcp`에서 받습니다. OAuth에는 별도의 인증·메타데이터 경로가 필요합니다. 전용 MCP 도메인이라면 모든 경로를 플러그인 포트로 전달하는 구성이 간단합니다. TLS 인증서와 도메인은 사용자 환경에서 설정합니다.
 
 ```nginx
 location / {
@@ -55,7 +55,7 @@ location / {
 }
 ```
 
-필요 경로: `/mcp`, `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`, `/.well-known/oauth-protected-resource/mcp`, `/authorize`, `/token`, `/register`, `/revoke`, `/oauth/flow/…`.
+필요 경로: `/`, `/mcp`, `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`, `/.well-known/oauth-protected-resource/mcp`, `/authorize`, `/token`, `/register`, `/revoke`, `/oauth/flow/…`.
 
 TLS는 LB에서 종료해도 됩니다. OAuth 주소는 저장된 공개 HTTPS 주소에서 결정하며 전달된 Host 헤더에서 추측하지 않습니다. LB 로그인 화면이 이 경로를 가로막으면 웹 채팅이 연결할 수 없습니다. `/healthz`는 프로세스 생존 확인이며 실제 MCP 호출 성공을 의미하지 않습니다. 기본 OAuth rate limit은 프록시 뒤의 클라이언트를 하나의 IP로 집계할 수 있으므로 다수 사용자 배포 시 별도 설계가 필요합니다.
 

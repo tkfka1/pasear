@@ -25,7 +25,7 @@ export class McpServerManager {
     const port = running ? this.active!.port : null;
     return {
       running, host, port, startedAt: running ? this.startedAt : null,
-      upstreamUrl: running ? `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}/mcp` : null,
+      upstreamUrl: running ? `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}${new URL(this.active!.publicUrl).pathname}` : null,
     };
   }
   start(config: McpConfig, paseo: PluginHandlerContext["paseo"]): Promise<McpStatus> {

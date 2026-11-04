@@ -5,9 +5,9 @@ export type { RpcInput } from "@getpaseo/plugin";
 const publicMcpUrlSchema = z.string().url("올바른 HTTPS MCP 주소를 입력하세요.").refine((value) => {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && url.pathname === "/mcp" && !url.search && !url.hash && !url.username && !url.password;
+    return url.protocol === "https:" && ["/", "/mcp"].includes(url.pathname) && !url.search && !url.hash && !url.username && !url.password;
   } catch { return false; }
-}, "공개 주소는 https://도메인/mcp 형식이어야 합니다. 쿼리나 사용자 정보는 넣지 마세요.");
+}, "공개 주소는 https://도메인 형식이어야 합니다. 기존 /mcp 주소도 사용할 수 있습니다. 쿼리나 사용자 정보는 넣지 마세요.");
 
 export const configSchema = z.object({
   host: z.enum(["127.0.0.1", "0.0.0.0"]).default("0.0.0.0"),

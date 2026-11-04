@@ -159,9 +159,13 @@ export class PaseoOAuthProvider {
     if (!/^[a-f0-9]{64}$/.test(connectionKey ?? "")) throw new Error("연결 비밀키가 필요합니다.");
     this.store = store;
     this.resource = new URL(resource).href;
+    // Both paths name this same installation. Keep existing grant audiences
+    // intact while allowing clients to connect through either endpoint.
+    const origin = new URL(this.resource).origin;
+    this.resources = new Set([`${origin}/`, `${origin}/mcp`]);
     this.keyHash = digest(connectionKey);
     this.store.useConnectionKey(this.keyHash);
-    this.store.useControlPermission(this.keyHash, this.resource);
+    for (const resource of this.resources) this.store.useControlPermission(this.keyHash, resource);
     this.clientsStore = {
       getClient: (id) => Object.hasOwn(this.store.data.clients, id) ? this.store.data.clients[id] : undefined,
       registerClient: (client) => {
@@ -180,8 +184,8 @@ export class PaseoOAuthProvider {
       },
     };
   }
-  checkResource(resource) {
-    if (resource && resource.href !== this.resource) throw new InvalidTargetError("Resource must match the configured public MCP URL.");
+  checkResource(resource, expected) {
+    if (resource && (!this.resources.has(resource.href) || (expected && resource.href !== expected))) throw new InvalidTargetError("Resource must match this MCP connection's public URL.");
   }
   async authorize(client, params, res) {
     this.store.prune();
@@ -194,7 +198,7 @@ export class PaseoOAuthProvider {
     this.store.admissions.set(id, {
       id, csrf: secret(), attempts: 0, clientId: client.client_id,
       clientName: client.client_name || "Unnamed MCP client", params: { ...params, scopes },
-      resource: this.resource, expiresAt: now() + 300,
+      resource: params.resource?.href ?? this.resource, expiresAt: now() + 300,
     });
     res.redirect(303, new URL(`/oauth/flow/${id}`, this.resource).href);
   }
@@ -245,7 +249,7 @@ export class PaseoOAuthProvider {
     if (pending.decision === "denied") redirect.searchParams.set("error", "access_denied");
     else {
       const code = secret();
-      this.store.codes.set(digest(code), { clientId: pending.clientId, params: pending.params, grantId: pending.grant.id, resource: this.resource, expiresAt: now() + 60 });
+      this.store.codes.set(digest(code), { clientId: pending.clientId, params: pending.params, grantId: pending.grant.id, resource: pending.resource, expiresAt: now() + 60 });
       redirect.searchParams.set("code", code);
     }
     return res.redirect(303, redirect.href);
@@ -253,20 +257,20 @@ export class PaseoOAuthProvider {
   code(client, code) {
     this.store.prune();
     const entry = this.store.codes.get(digest(code));
-    if (!entry || entry.clientId !== client.client_id || entry.resource !== this.resource) throw new InvalidGrantError("Invalid or expired authorization code.");
+    if (!entry || entry.clientId !== client.client_id || !this.resources.has(entry.resource)) throw new InvalidGrantError("Invalid or expired authorization code.");
     return entry;
   }
   async challengeForAuthorizationCode(client, code) { return this.code(client, code).params.codeChallenge; }
   async exchangeAuthorizationCode(client, code, _verifier, redirectUri, resource) {
-    this.checkResource(resource);
     const entry = this.code(client, code);
+    this.checkResource(resource, entry.resource);
     if (redirectUri !== entry.params.redirectUri) throw new InvalidGrantError("redirect_uri must match the authorization request.");
     this.store.codes.delete(digest(code));
     return this.issue(entry.grantId);
   }
   issue(grantId) {
     const grant = this.store.data.grants[grantId];
-    if (!grant || grant.revoked || grant.keyHash !== this.keyHash || grant.expiresAt <= now() || grant.resource !== this.resource) throw new InvalidGrantError("Connection expired or revoked.");
+    if (!grant || grant.revoked || grant.keyHash !== this.keyHash || grant.expiresAt <= now() || !this.resources.has(grant.resource)) throw new InvalidGrantError("Connection expired or revoked.");
     if (!hasControl(grant.scopes)) throw new InvalidGrantError("Task control permission is required.");
     this.store.prune();
     if (Object.keys(this.store.data.access).length >= 2000 || Object.keys(this.store.data.refresh).length >= 5000) throw new InvalidGrantError("Too many active tokens. Reconnect later.");
@@ -282,7 +286,8 @@ export class PaseoOAuthProvider {
     this.store.prune();
     const entry = this.store.data.refresh[digest(refresh)];
     const grant = entry && this.store.data.grants[entry.grantId];
-    if (!entry || !grant || grant.keyHash !== this.keyHash || grant.clientId !== client.client_id || grant.resource !== this.resource || grant.revoked || grant.expiresAt <= now()) throw new InvalidGrantError("Invalid refresh token.");
+    if (!entry || !grant || grant.keyHash !== this.keyHash || grant.clientId !== client.client_id || !this.resources.has(grant.resource) || grant.revoked || grant.expiresAt <= now()) throw new InvalidGrantError("Invalid refresh token.");
+    this.checkResource(resource, grant.resource);
     if (entry.used) { this.store.revoke(grant.id); throw new InvalidGrantError("Refresh token reuse detected. Reconnect from your web chat."); }
     // Existing clients may repeat a cached scope on refresh. All recognized
     // scopes belong to the same owner-approved permission; return its full scope.
@@ -294,9 +299,9 @@ export class PaseoOAuthProvider {
   async verifyAccessToken(token) {
     const entry = this.store.data.access[digest(token)];
     const grant = entry && this.store.data.grants[entry.grantId];
-    if (!entry || entry.expiresAt <= now() || !grant || grant.keyHash !== this.keyHash || grant.revoked || grant.expiresAt <= now() || grant.resource !== this.resource) throw new InvalidTokenError("Invalid or expired access token.");
+    if (!entry || entry.expiresAt <= now() || !grant || grant.keyHash !== this.keyHash || grant.revoked || grant.expiresAt <= now() || !this.resources.has(grant.resource)) throw new InvalidTokenError("Invalid or expired access token.");
     if (!hasControl(grant.scopes) || !hasControl(entry.scopes)) throw new InvalidTokenError("Task control permission is required.");
-    return { token, clientId: grant.clientId, scopes: entry.scopes, expiresAt: entry.expiresAt, resource: new URL(this.resource), extra: { grantId: grant.id, workspaceIds: grant.workspaceIds, agentIds: grant.agentIds ?? null, accessRules: grant.accessRules ?? null, accessRevision: grant.accessRevision ?? 0 } };
+    return { token, clientId: grant.clientId, scopes: entry.scopes, expiresAt: entry.expiresAt, resource: new URL(grant.resource), extra: { grantId: grant.id, workspaceIds: grant.workspaceIds, agentIds: grant.agentIds ?? null, accessRules: grant.accessRules ?? null, accessRevision: grant.accessRevision ?? 0 } };
   }
   async revokeToken(client, request) {
     const entry = this.store.data.access[digest(request.token)] ?? this.store.data.refresh[digest(request.token)];

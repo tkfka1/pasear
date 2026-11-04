@@ -79,9 +79,24 @@ test("v1 and v2 settings preserve listener, public URL and secret while removing
 
 test("incomplete drafts can be saved but malformed public URLs cannot", () => {
   assert.equal(configSchema.safeParse({}).success, true);
-  for (const publicUrl of ["unfinished", "http://mcp.example/mcp", "https://mcp.example/wrong", "https://mcp.example/mcp?x=1", "https://user:secret@mcp.example/mcp"]) {
+  for (const publicUrl of ["https://mcp.example", "https://mcp.example/", "https://mcp.example/mcp"]) {
+    assert.equal(configSchema.parse({ publicUrl }).publicUrl, publicUrl);
+  }
+  for (const publicUrl of ["unfinished", "http://mcp.example", "http://mcp.example/mcp", "https://mcp.example/wrong", "https://mcp.example/?x=1", "https://mcp.example/#fragment", "https://mcp.example/mcp?x=1", "https://user:secret@mcp.example/mcp"]) {
     assert.equal(configSchema.safeParse({ publicUrl }).success, false);
   }
+});
+
+test("a domain-only public URL starts MCP at the root with matching discovery", async (t) => {
+  const manager = new McpServerManager();
+  t.after(() => manager.stop());
+  const status = await manager.start(configSchema.parse({ port: await freePort(), connectionKey, publicUrl: "https://paseo.example" }), api);
+  assert.equal(new URL(status.upstreamUrl!).pathname, "/");
+  const response = await fetch(status.upstreamUrl!);
+  assert.equal(response.status, 401);
+  assert.match(response.headers.get("www-authenticate")!, /oauth-protected-resource"/);
+  const metadata = await (await fetch(new URL("/.well-known/oauth-protected-resource", status.upstreamUrl!))).json() as { resource: string };
+  assert.equal(metadata.resource, "https://paseo.example/");
 });
 
 test("both public URL and connection key are mandatory and OAuth is always available", async (t) => {
