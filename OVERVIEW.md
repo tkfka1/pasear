@@ -1,6 +1,6 @@
 pasear connects web chat to the Paseo agents running on your own host. Ask for work, switch between agents, send follow-up instructions, inspect progress, read conversations and tool activity, summarize results, or stop the current run. You can also recover supported provider sessions or hand a task summary to a new agent using another provider.
 
-The plugin adds a single Paseo screen with a walking dog and inline settings, connections, and usage guidance. Its MCP listener starts only when you press Start and stays off after a plugin reload. Each host runs its own listener, settings, and connections. Switching the management screen to another host does not redirect an existing chat connection.
+The plugin adds one compact Paseo screen for server status, settings, and chat connections. First-time setup shows the public URL field directly; port, network access, and key replacement stay under advanced settings. Its MCP listener starts only when you press Start and stays off after a plugin reload. Each host runs its own listener, settings, and connections. Switching the management screen to another host does not redirect an existing chat connection.
 
 Requires Paseo daemon and client 0.11.2 or later, a local paseo CLI for cancellation and native session import, and npm for installation preparation. Configure your own public HTTPS reverse proxy or load balancer, enter its MCP URL ending in /mcp, and connect it in your web chat. The interface and built-in usage guide are currently in Korean.
 

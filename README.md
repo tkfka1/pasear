@@ -4,7 +4,7 @@ Control your Paseo agents from web chat. Start work, inspect several agents, swi
 
 [한국어 안내](README.ko.md)
 
-![pasear main screen with a walking dog and inline settings and connections](assets/screenshot.png)
+![pasear server settings and chat connections](assets/screenshot.png)
 
 ```text
 Web chat → your HTTPS proxy → pasear MCP server → Paseo → coding agents
@@ -15,7 +15,7 @@ Web chat → your HTTPS proxy → pasear MCP server → Paseo → coding agents
 Requires Paseo daemon and client **0.11.2 or later**, npm, and the local `paseo` CLI for stopping runs and importing native sessions.
 
 ```bash
-paseo plugin add git:tkfka1/pasear --ref v0.9.1
+paseo plugin add git:tkfka1/pasear --ref v0.10.0
 ```
 
 Paseo installs the locked runtime dependencies with `npm ci --omit=dev --ignore-scripts`. The installed plugin ID remains `paseo-mcp-plugin`; the display name is **pasear**. The interface and its usage guide are currently in Korean.
@@ -24,7 +24,7 @@ Paseo installs the locked runtime dependencies with `npm ci --omit=dev --ignore-
 
 1. Open **pasear** in Paseo. Select the host you want to control.
 2. Configure a public HTTPS proxy or load balancer for that host's listener. The default listener is `127.0.0.1:8787`; choose `0.0.0.0` when the proxy needs network access to it.
-3. Enter the public MCP URL, such as `https://mcp.example.com/mcp`, save the settings, and start the server. The listener starts stopped after a plugin reload.
+3. Enter the public MCP URL, such as `https://mcp.example.com/mcp`, and select **Save and start**. Further settings and chat connections stay on the same screen. The listener starts stopped after a plugin reload.
 4. Add that URL as an OAuth MCP connector in your chat. For Claude, choose **Automatically register** (DCR).
 5. Enter the connection key in the OAuth browser window. In Paseo, compare the confirmation code and callback URL, select allowed workspaces, and approve the connection.
 

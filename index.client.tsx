@@ -5,7 +5,7 @@ import { McpScreen } from "./client/mcp-screen";
 function McpItem({ currentScreen, openScreen }: PluginSidebarItemProps) {
   return (
     <SidebarRow
-      icon="PawPrint"
+      icon="Link"
       active={currentScreen?.screenId === "mcp"}
       onPress={() => openScreen({ screenId: "mcp" })}
     />

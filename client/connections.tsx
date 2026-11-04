@@ -29,8 +29,8 @@ function Approval({ request, workspaces, hasMore, colors, hostLabel, pending, on
     <Text style={{ ...text, fontWeight: "600" }}>{request.clientName}</Text>
     <Text selectable style={text}>확인 코드 {request.code}</Text>
     <Text selectable style={muted}>돌아갈 주소: {request.redirectUri}</Text>
-    <Text style={muted}>인증 창의 코드·주소와 비교하세요. 앱 이름은 요청자가 입력한 값입니다.</Text>
-    <Text style={text}>승인하면 {hostLabel}의 선택한 워크스페이스에서 작업 요청·메시지 전송·중단을 허용합니다.</Text>
+    <Text style={muted}>인증 창의 코드·주소를 확인하세요. 앱 이름만으로 신뢰하지 마세요.</Text>
+    <Text style={text}>{hostLabel} · 선택한 워크스페이스의 작업 제어를 허용합니다.</Text>
     <Text style={{ ...text, fontWeight: "600" }}>허용할 워크스페이스</Text>
     {choice("전체 워크스페이스", workspaceIds === null, () => setWorkspaceIds(workspaceIds === null ? [] : null))}
     {workspaceIds === null ? <Text style={muted}>앞으로 만드는 워크스페이스도 포함합니다.</Text> : workspaces.map((workspace) => <View key={workspace.id}>
@@ -48,7 +48,6 @@ function Approval({ request, workspaces, hasMore, colors, hostLabel, pending, on
 // Requests stay on the main page even while another disclosure is open.
 export function Connections({ colors, hostId, hostLabel, expanded }: { colors: Colors; hostId: string; hostLabel: string; expanded: boolean }) {
   const paseo = usePaseo();
-  const [showEvents, setShowEvents] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const statusRpc = useRpc(getConnections), decideRpc = useRpc(decideConnection), revokeRpc = useRpc(revokeConnection);
@@ -76,10 +75,9 @@ export function Connections({ colors, hostId, hostLabel, expanded }: { colors: C
     </View> : null}
     {action.error ? <Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>{action.error instanceof Error ? action.error.message : "요청을 처리하지 못했습니다."}</Text> : null}
     {expanded ? <View style={{ gap: 12 }}>
-      <Text accessibilityRole="header" style={{ ...text, fontSize: 17, fontWeight: "600" }}>연결된 채팅</Text>
-      <Text style={muted}>{hostLabel}에 연결된 채팅과 접근 범위입니다.</Text>
+      <Text accessibilityRole="header" style={{ ...text, fontSize: 15, fontWeight: "600" }}>연결{state.data ? ` · ${state.data.connections.length}` : ""}</Text>
       {state.isError ? <Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>연결 목록을 불러오지 못했습니다. 다시 조회하세요.</Text> : !state.data ? <Text style={muted}>연결을 불러오는 중…</Text> : null}
-      {state.data && !state.data.connections.length ? <Text style={muted}>아직 연결된 채팅이 없습니다. 아래 주소로 연결하세요.</Text> : null}
+      {state.data && !state.data.connections.length ? <Text style={muted}>연결된 채팅이 없습니다.</Text> : null}
       {state.data?.connections.map((connection) => <View key={connection.id} style={{ gap: 8, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <View style={{ flex: 1, gap: 4 }}>
@@ -89,22 +87,15 @@ export function Connections({ colors, hostId, hostLabel, expanded }: { colors: C
               : <><Text style={muted}>{connection.workspaceIds === null ? "전체 워크스페이스" : `${connection.workspaceIds.length}개 워크스페이스`}</Text>
                 <Text style={muted}>{connection.agentIds === null ? "모든 에이전트" : `${connection.agentIds.length}개 에이전트`}</Text></>}
           </View>
-          <Action colors={colors} label={`${connection.clientName} 연결 해제`} disabled={action.isPending} onPress={() => action.mutate({ kind: "revoke", id: connection.id })} />
+          <Action colors={colors} label="연결 해제" disabled={action.isPending} onPress={() => action.mutate({ kind: "revoke", id: connection.id })} />
         </View>
         {editing === connection.id ? <AccessEditor key={connection.id} connection={connection} colors={colors} hostId={hostId}
-          onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); setNotice("접근 범위를 저장했습니다. 연결에 바로 적용됩니다."); void state.refetch(); }} />
-          : <View style={{ alignItems: "flex-start" }}><Action colors={colors} label={`${connection.clientName} 접근 범위`} disabled={action.isPending}
+          onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); setNotice("접근 범위를 저장했습니다."); void state.refetch(); }} />
+          : <View style={{ alignItems: "flex-start" }}><Action colors={colors} label="접근 범위" disabled={action.isPending}
             onPress={() => { setNotice(""); setEditing(connection.id); }} /></View>}
       </View>)}
     </View> : null}
     {notice && expanded ? <Text accessibilityLiveRegion="polite" style={muted}>{notice}</Text> : null}
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-      <Action colors={colors} label="목록 다시 조회" disabled={action.isPending} onPress={() => { void state.refetch(); void workspaces.refetch(); }} />
-      {expanded && state.data?.events.length ? <Action colors={colors} label={showEvents ? "최근 활동 접기" : "최근 활동"} onPress={() => setShowEvents(!showEvents)} /> : null}
-    </View>
-    {expanded && showEvents ? <View style={{ gap: 8 }}>
-      {state.data?.events.slice(0, 5).map((event, index) => <Text key={`${event.at}-${index}`} style={muted}>{new Date(event.at).toLocaleTimeString()} · {event.tool} · {event.outcome === "ok" ? "성공" : "오류"}</Text>)}
-      <Text style={muted}>토큰·메시지·결과 본문은 기록하지 않습니다.</Text>
-    </View> : null}
+    {state.isError || workspaces.isError ? <View style={{ alignItems: "flex-start" }}><Action colors={colors} label="다시 불러오기" disabled={action.isPending} onPress={() => { void state.refetch(); if (requests.length) void workspaces.refetch(); }} /></View> : null}
   </View>;
 }
