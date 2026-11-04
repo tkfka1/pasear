@@ -15,7 +15,7 @@ Web chat → your HTTPS proxy → pasear MCP server → Paseo → coding agents
 Requires Paseo daemon and client **0.11.2 or later**, npm, and the local `paseo` CLI for stopping runs and importing native sessions.
 
 ```bash
-paseo plugin add git:tkfka1/pasear --ref v0.9.0
+paseo plugin add git:tkfka1/pasear --ref v0.9.1
 ```
 
 Paseo installs the locked runtime dependencies with `npm ci --omit=dev --ignore-scripts`. The installed plugin ID remains `paseo-mcp-plugin`; the display name is **pasear**. The interface and its usage guide are currently in Korean.

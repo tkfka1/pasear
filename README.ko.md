@@ -19,7 +19,7 @@ OAuth 메타데이터·DCR·PKCE·토큰 갱신·연결 해제를 구현했습�
 ## 서버 시작
 
 ```bash
-paseo plugin add git:tkfka1/pasear --ref v0.9.0
+paseo plugin add git:tkfka1/pasear --ref v0.9.1
 ```
 
 Paseo 데몬·클라이언트 0.11.2 이상과 이미 활성화된 플러그인 기능이 필요합니다. 실행 취소에는 데몬 호스트의 `paseo` CLI도 필요합니다.

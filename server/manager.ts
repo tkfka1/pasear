@@ -1,5 +1,5 @@
 import type { Server } from "node:http";
-import type { PaseoApi } from "@getpaseo/client";
+import type { PluginHandlerContext } from "@getpaseo/plugin/server";
 import type { McpConfig, McpStatus } from "../shared/mcp";
 import { configSchema } from "../shared/mcp";
 import { createApp } from "./app.js";
@@ -28,7 +28,7 @@ export class McpServerManager {
       upstreamUrl: running ? `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}/mcp` : null,
     };
   }
-  start(config: McpConfig, paseo: PaseoApi): Promise<McpStatus> {
+  start(config: McpConfig, paseo: PluginHandlerContext["paseo"]): Promise<McpStatus> {
     return this.exclusive(async () => {
       const parsed = configSchema.safeParse(config);
       if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "MCP 설정을 확인하세요.");

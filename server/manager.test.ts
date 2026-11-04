@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import { test } from "node:test";
-import type { PaseoApi } from "@getpaseo/client";
+import type { PluginHandlerContext } from "@getpaseo/plugin/server";
 import { McpServerManager } from "./manager";
 import { configSchema, preferences } from "../shared/mcp";
 
-const api = {} as PaseoApi;
+const api = {} as PluginHandlerContext["paseo"];
 const connectionKey = "a".repeat(64);
 const publicUrl = "https://paseo.example/mcp";
 async function freePort() {
