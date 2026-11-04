@@ -4,7 +4,7 @@ Control your Paseo agents from web chat. Start work, inspect several agents, swi
 
 [한국어 안내](README.ko.md)
 
-![pasear server settings and chat connections](assets/screenshot.png)
+![A sunlit walking path winding through a green forest](assets/forest-path.png)
 
 ```text
 Web chat → your HTTPS proxy → pasear MCP server → Paseo → coding agents

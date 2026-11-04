@@ -1,5 +1,7 @@
 # pasear
 
+![햇빛이 드는 초록 숲 사이로 이어지는 산책길](assets/forest-path.png)
+
 **Claude·ChatGPT·Gemini·Grok 웹 채팅에서 내 Paseo 에이전트에 일을 맡기고 제어합니다.** 이름은 스페인어로 “산책하다”라는 뜻입니다.
 
 ```text
