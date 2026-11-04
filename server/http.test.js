@@ -51,7 +51,7 @@ test("Claude-compatible MCP initialization and tool discovery do not require a l
   const h = await harness(t, {});
   await h.connect();
   const { tools } = await h.client.listTools();
-  assert.equal(tools.length, 9);
+  assert.equal(tools.length, 10);
   assert.ok(tools.some(({ name }) => name === "create_agent"));
   assert.ok(tools.some(({ name }) => name === "get_agent"));
   assert.ok(!tools.some(({ name }) => /kill|permission|config/.test(name)));

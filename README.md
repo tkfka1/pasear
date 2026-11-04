@@ -15,7 +15,7 @@ Web chat → your HTTPS proxy → pasear MCP server → Paseo → coding agents
 Requires Paseo daemon and client **0.11.2 or later**, npm, and the local `paseo` CLI for stopping runs and importing native sessions.
 
 ```bash
-paseo plugin add git:tkfka1/pasear --ref v0.10.2
+paseo plugin add git:tkfka1/pasear --ref v0.11.0
 ```
 
 Paseo installs the locked runtime dependencies with `npm ci --omit=dev --ignore-scripts`. The installed plugin ID remains `paseo-mcp-plugin`; the display name is **pasear**. The interface is currently in Korean.
@@ -36,6 +36,7 @@ Claude, ChatGPT, Gemini, and Grok connector availability depends on the account,
 
 Select the connector in your chat, then ask naturally:
 
+- “Show my projects, then the workspaces in the shop project.”
 - “Show the current tasks and anything that needs my attention.”
 - “Check the login task, then tell that agent to run regression tests.”
 - “How is the deployment task going?”
@@ -48,11 +49,12 @@ The chat model chooses and combines tools; no invocation keyword is required. It
 
 | Tool | Purpose |
 | --- | --- |
-| `list_workspaces` | Discover allowed workspaces and their projects. |
-| `list_agents` | List tasks and their state; include archived tasks when needed. |
+| `list_projects` | List allowed parent projects; distinguish full project access from partial child access. |
+| `list_workspaces` | Discover allowed workspaces, optionally within a project. |
+| `list_agents` | List allowed tasks and their state, optionally by project or workspace; include archived tasks when needed. |
 | `list_providers` | Discover available coding providers for a workspace. |
 | `list_models` | Choose a provider model. |
-| `create_agent` | Create a task and return an acceptance receipt. |
+| `create_agent` | Create a task in an allowed workspace, optionally selecting its parent project; return an acceptance receipt. |
 | `send_agent_prompt` | Send a follow-up; steer by default, interrupt only when requested. |
 | `get_agent` | Inspect summary, status, conversation messages, or paged work activity; optionally wait up to 20 seconds. |
 | `cancel_agent` | Request interruption of the current run while retaining history and edits. |
@@ -64,7 +66,7 @@ Native import requires host-wide access with the current CLI, retained provider 
 
 ## Access and multiple hosts
 
-Each connection has one task-control permission, limited to the projects, workspaces, and agents allowed by the owner. Whole projects/workspaces include future children; an agent-only selection cannot create new agents. Access edits and revocation apply without reconnecting. These limits govern MCP operations, not the provider's filesystem sandbox or tool permissions. Answer provider permission requests in Paseo.
+Each connection has one task-control permission, limited to the projects, workspaces, and agents allowed by the owner. Project discovery uses the same access rules: a child-only grant reveals its parent name, not sibling workspaces, project paths, or totals. An empty project appears only when the project is fully allowed. Select projects in the connection’s access editor. Whole projects/workspaces include future children; an agent-only selection cannot create new agents. Access edits and revocation apply without reconnecting. These limits govern MCP operations, not the provider's filesystem sandbox or tool permissions. Answer provider permission requests in Paseo.
 
 Install pasear independently on each host. Each needs its own public URL and chat connector. Changing the host in the Paseo screen does not retarget a connected chat, and the load balancer must not distribute requests across unrelated hosts.
 

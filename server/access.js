@@ -6,7 +6,10 @@ export function connectionAccess(api, principal) {
   async function workspace(id, create = false) {
     if (!rules) return legacyWorkspace(id) && (!create || principal.agentIds == null);
     if (unrestricted || rules.some((r) => r.kind === "workspace" && r.id === id)) return true;
-    if (!create && rules.some((r) => r.kind === "agent" && r.workspaceId === id)) return true;
+    if (!create) for (const rule of rules.filter((r) => r.kind === "agent" && r.workspaceId === id)) {
+      const selected = api.agents.ref(rule.id);
+      if (await selected.refresh() && selected.current()?.workspaceId === id) return true;
+    }
     if (!id || !rules.some((r) => r.kind === "project")) return false;
     const ref = api.workspaces.ref(id);
     if (!await ref.refresh()) return false;
