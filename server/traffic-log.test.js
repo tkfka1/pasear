@@ -91,7 +91,7 @@ test("HTTP logs capture authenticated MCP requests and replies, protocol errors 
   const { log, directory } = await harness(t);
   const connectionKey = "e".repeat(64), publicUrl = "https://logs.example/mcp", oauthStore = new OAuthStore();
   const provider = new PaseoOAuthProvider(oauthStore, publicUrl, connectionKey), grantId = randomUUID();
-  oauthStore.data.grants[grantId] = { id: grantId, clientName: "Web chat", clientId: "test", resource: publicUrl, keyHash: provider.keyHash, scopes: SCOPES, workspaceIds: null, expiresAt: Date.now() / 1000 + 1000 };
+  oauthStore.data.grants[grantId] = { id: grantId, clientName: "Web chat", clientId: "test", createdAt: Math.floor(Date.now() / 1000), resource: publicUrl, keyHash: provider.keyHash, scopes: SCOPES, workspaceIds: null, expiresAt: Date.now() / 1000 + 1000 };
   const token = provider.issue(grantId).access_token;
   const api = { agents: { list: async () => ({ entries: [], pageInfo: { nextCursor: null } }) } };
   const listener = createApp({ connectionKey, publicUrl, oauthStore, trafficLog: log, connection: { getApi: async () => api } }).listen(0, "127.0.0.1"); await once(listener, "listening");
@@ -116,6 +116,16 @@ test("HTTP logs capture authenticated MCP requests and replies, protocol errors 
   const raw = (await Promise.all((await readdir(directory)).map((n) => readFile(join(directory, n), 'utf8')))).join('\n');
   for (const secret of [connectionKey, token, 'sensitive-cookie', 'private-query', 'oauth-form-secret', 'secret-oauth-client', 'unknown-api-secret']) assert.ok(!raw.includes(secret), secret);
   assert.ok(raw.includes('list_agents')); assert.equal((await fetch(base + '/mcp')).status, 401);
+  const collected = await log.list(); const events = structuredClone(oauthStore.snapshot().events);
+  await log.configure(false);
+  assert.equal((await post({ jsonrpc: "2.0", id: 90, method: "tools/call", params: { name: "list_agents", arguments: {} } })).status, 200);
+  assert.equal((await fetch(base + '/mcp')).status, 401);
+  assert.deepEqual((await log.list()).entries, collected.entries);
+  assert.deepEqual(oauthStore.snapshot().events, events, "disabled collection also excludes in-memory tool audit");
+  await log.configure(true);
+  assert.equal((await post({ jsonrpc: "2.0", id: 91, method: "tools/call", params: { name: "list_agents", arguments: {} } })).status, 200);
+  assert.equal((await log.list()).entries.length, collected.entries.length + 1);
+  assert.equal(oauthStore.snapshot().events.length, events.length + 1);
 });
 
 test("reload leaves malformed tail isolated, cleanup flushes completed records, and large reply omissions are explicit", async (t) => {
@@ -154,4 +164,27 @@ test("an interrupted MCP response records one aborted exchange without delaying 
   const response = await fetch(`http://127.0.0.1:${listener.address().port}/mcp`, { method: 'POST', signal: controller.signal });
   controller.abort(); await response.body.cancel().catch(() => {}); await closed;
   const rows = (await log.list()).entries; assert.equal(rows.length, 1); assert.equal(rows[0].outcome, 'aborted');
+});
+
+
+test("collection off removes active response capture immediately and bypasses hooks on new requests", async (t) => {
+  const { log } = await harness(t);
+  const { default: express } = await import('express');
+  const { captureTraffic } = await import('./traffic-http.js');
+  const app = express(); let active, originalWrite, originalEnd;
+  app.use((_req, res, next) => { originalWrite = res.write; originalEnd = res.end; next(); });
+  app.use(captureTraffic(log, 'key'));
+  app.post('/mcp', (_req, res) => { active = res; res.set('content-type', 'application/json'); res.write('{"message":'); });
+  const listener = app.listen(0, '127.0.0.1'); await once(listener, 'listening');
+  t.after(() => { listener.closeAllConnections(); return new Promise((resolve) => listener.close(resolve)); });
+  const response = await fetch(`http://127.0.0.1:${listener.address().port}/mcp`, { method: 'POST' });
+  assert.notEqual(active.write, originalWrite); assert.equal(log.captures.size, 1);
+  await log.configure(false);
+  assert.equal(log.captures.size, 0); assert.equal(active.write, originalWrite); assert.equal(active.end, originalEnd);
+  active.end('"private response"}'); assert.equal((await response.json()).message, 'private response');
+  assert.equal((await log.list()).entries.length, 0);
+  const next = await fetch(`http://127.0.0.1:${listener.address().port}/mcp`, { method: 'POST' });
+  assert.equal(active.write, originalWrite); assert.equal(active.end, originalEnd); assert.equal(log.captures.size, 0);
+  active.end('"not collected"}'); await next.json(); assert.equal((await log.list()).entries.length, 0);
+  await log.configure(true); assert.equal((await log.status()).enabled, true);
 });

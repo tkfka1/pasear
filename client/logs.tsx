@@ -1,7 +1,7 @@
 import { useRpc } from "@getpaseo/plugin/client";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Platform, ScrollView, Share, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, ScrollView, Share, Text, TextInput, View } from "react-native";
 import { clearLogs, configureLogs, exportLogs, getLogDetail, getLogStatus, listLogs } from "../shared/logs";
 import { Action, type Colors } from "./controls";
 import { downloadText } from "./web";
@@ -57,9 +57,9 @@ export function Logs({ colors, hostId }: { colors: Colors; hostId: string }) {
     const timer = setTimeout(() => { setFilters(next); setSelected(null); }, 300);
     return () => clearTimeout(timer);
   }, [connection, tool, filters]);
-  const action = useMutation({ mutationFn: async (kind: "toggle" | "clear" | "export") => {
+  const action = useMutation({ mutationFn: async (kind: "collect" | "skip" | "clear" | "export") => {
     setNotice("");
-    if (kind === "toggle") { if (!state.data) throw Error("기록 상태를 다시 불러오세요."); return configureRpc({ enabled: !state.data.enabled }); }
+    if (kind === "collect" || kind === "skip") return configureRpc({ enabled: kind === "collect" });
     if (kind === "clear") {
       const result = await clearRpc({}); setSelected(null); setConfirmDelete(false);
       cache.removeQueries({ queryKey: ["pasear-log-detail", hostId] });
@@ -83,13 +83,26 @@ export function Logs({ colors, hostId }: { colors: Colors; hostId: string }) {
       <Text accessibilityRole="header" style={{ ...text, fontWeight: "600" }}>통신 로그</Text>
       <Action colors={colors} quiet expanded={expanded} label={expanded ? "로그 접기" : "로그 열기"} onPress={() => setExpanded(!expanded)} />
     </View>
-    <Text accessibilityLiveRegion="polite" style={muted}>{state.data ? `${state.data.enabled ? "기록 중" : "기록 꺼짐"} · ${size(state.data.storedBytes)} · 최근 ${state.data.retentionDays}일, 최대 ${size(state.data.maxBytes)}` : state.isError ? "기록 상태를 확인하지 못했습니다." : "기록 상태를 불러오는 중…"}</Text>
+    <Text accessibilityLiveRegion="polite" style={muted}>{state.data ? `${state.data.enabled ? "수집 중" : "수집 안 함"} · ${size(state.data.storedBytes)} · 최근 ${state.data.retentionDays}일, 최대 ${size(state.data.maxBytes)}` : state.isError ? "기록 상태를 확인하지 못했습니다." : "기록 상태를 불러오는 중…"}</Text>
+    <View accessibilityRole="radiogroup" accessibilityLabel="로그 수집" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      {([[true, "수집함"], [false, "수집 안 함"]] as const).map(([enabled, label]) => {
+        const checked = state.data?.enabled === enabled;
+        return <Pressable key={label} accessibilityRole="radio" accessibilityLabel={label} aria-checked={checked}
+          accessibilityState={{ checked, disabled: pending || !state.data || state.isError }} disabled={pending || !state.data || state.isError}
+          onPress={() => { if (!checked) action.mutate(enabled ? "collect" : "skip"); }}
+          style={({ pressed }) => ({ minHeight: 44, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1,
+            borderColor: checked || focused === label ? colors.accent : colors.border, backgroundColor: checked || pressed ? colors.surface1 : colors.surface0,
+            opacity: pending || !state.data || state.isError ? 0.45 : 1 })} onFocus={() => setFocused(label)} onBlur={() => setFocused("")}>
+          <Text style={{ ...text, fontWeight: checked ? "600" : "400" }}>{label}</Text>
+        </Pressable>;
+      })}
+    </View>
+    {state.data?.enabled === false ? <Text style={muted}>새 요청·응답과 호출 이력을 수집하지 않습니다. 기존 로그는 유지되며 전체 로그 삭제로 지울 수 있습니다.</Text> : null}
     {state.data?.error ? <Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>{state.data.error}</Text> : null}
     {state.data?.dropped ? <Text style={{ ...muted, color: colors.statusDanger }}>이번 실행에서 {state.data.dropped}건을 저장하지 못했습니다. 저장 오류 또는 기록량 제한을 확인하세요.</Text> : null}
     {expanded ? <View style={{ gap: 16 }}>
       <Text style={muted}>MCP 요청·응답을 이 호스트에 저장합니다. 인증 헤더·OAuth 본문은 기록하지 않으며, 알려진 인증 값과 비밀키 필드를 가립니다. 본문에는 작업 내용이 포함됩니다. 응답이 1MB를 넘으면 본문 생략 표시를 남깁니다.</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        <Action colors={colors} label={state.data?.enabled ? "기록 끄기" : "기록 켜기"} disabled={pending || !state.data} onPress={() => action.mutate("toggle")} />
         <Action colors={colors} label="로그 새로고침" disabled={pending || rows.isFetching} onPress={() => { setSelected(null); void cache.resetQueries({ queryKey: ["pasear-logs", hostId] }); void state.refetch(); }} />
       </View>
       <View style={{ gap: 8 }}>{input("연결 이름 또는 ID로 필터", connection, setConnection)}{input("도구 이름으로 필터", tool, setTool)}</View>

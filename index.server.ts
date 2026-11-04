@@ -27,7 +27,7 @@ export default function contribute(server: PluginServerContext) {
   const manager = new McpServerManager(oauth, traffic);
   server.handle(getLogStatus, () => traffic.status());
   server.handle(configureLogs, ({ enabled }) => traffic.configure(enabled));
-  server.handle(clearLogs, () => traffic.clear());
+  server.handle(clearLogs, async () => { const state = await traffic.clear(); oauth.events = []; return state; });
   server.handle(listLogs, (input) => traffic.list(input));
   server.handle(getLogDetail, ({ id }) => traffic.detail(id));
   server.handle(exportLogs, (input) => traffic.exportPage(input));

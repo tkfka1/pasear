@@ -15,7 +15,7 @@ Web chat → your HTTPS proxy → pasear MCP server → Paseo → coding agents
 Requires Paseo daemon and client **0.11.2 or later**, npm, and the local `paseo` CLI for stopping runs and importing native sessions.
 
 ```bash
-paseo plugin add git:tkfka1/pasear --ref v0.12.0
+paseo plugin add git:tkfka1/pasear --ref v0.12.1
 ```
 
 Paseo installs the locked runtime dependencies with `npm ci --omit=dev --ignore-scripts`. The installed plugin ID remains `paseo-mcp-plugin`; the display name is **pasear**. The interface is currently in Korean.
@@ -74,7 +74,7 @@ Prompts and selected history go to the chat service and selected coding provider
 
 ## MCP traffic logs
 
-Open **통신 로그 → 로그 열기** on the main screen to inspect request/response bodies, filter by connection name/ID or tool name, toggle recording, refresh, or delete all logs. Web clients can download one record or all matching records as JSONL; native apps can share individual records. Deletion affects all filters and prevents already-running requests from recreating erased records. Recording changes apply without restarting MCP.
+Choose **수집함 / 수집 안 함** in the always-visible **통신 로그** section. Collection off bypasses new request/response capture, file writes and in-memory tool audit, releases active response capture immediately, and persists across reloads. Existing logs remain available. Open **로그 열기** to inspect bodies, filter by connection name/ID or tool name, refresh, or delete all logs. Web clients can download one record or all matching records as JSONL; native apps can share individual records. Deletion affects all filters and prevents already-running requests from recreating erased records. Recording changes apply without restarting MCP.
 
 Recording starts enabled and persists under `$PASEO_HOME/plugin-data/paseo-mcp-plugin/logs/` with `0700` directories and `0600` files. Files rotate at 4 MiB with a 7-day, 50 MiB retention limit. Preferences and logs survive reloads. Disk errors and queue-pressure drops appear in the management UI; logging failures do not fail MCP operations.
 

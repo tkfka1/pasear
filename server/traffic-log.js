@@ -37,6 +37,7 @@ export class TrafficLog {
     this.queuedBytes = 0;
     this.segments = [];
     this.exports = new Map();
+    this.captures = new Set();
     this.queue = Promise.resolve();
     this.ready = this.exclusive(async () => {
       await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -63,6 +64,13 @@ export class TrafficLog {
     for (const [id, entry] of this.exports) if (entry.expires < Date.now()) this.exports.delete(id);
   }
   capture() { return this.enabled && !this.closed ? this.generation : null; }
+  isCapturing(generation) { return generation != null && generation === this.generation && this.enabled && !this.closed; }
+  watchCapture(generation, cancel) {
+    if (!this.isCapturing(generation)) { cancel(); return () => {}; }
+    this.captures.add(cancel);
+    return () => { this.captures.delete(cancel); };
+  }
+  cancelCaptures() { for (const cancel of this.captures) cancel(); this.captures.clear(); }
   record(entry, generation, secrets = []) {
     if (this.closed || generation === null || generation !== this.generation || !this.enabled) return;
     let line;
@@ -99,12 +107,12 @@ export class TrafficLog {
         await writeFile(temporary, JSON.stringify({ enabled }), { mode: 0o600, flag: "wx" });
         await rename(temporary, join(this.directory, "settings.json"));
       } catch { await unlink(temporary).catch(() => {}); throw Error("로그 설정을 저장하지 못했습니다. 디스크와 파일 권한을 확인하세요."); }
-      this.enabled = enabled; this.generation++; return this.state();
+      this.enabled = enabled; this.generation++; this.cancelCaptures(); return this.state();
     });
   }
   async clear() {
     // In-flight requests and already queued writes must not resurrect erased data.
-    this.generation++; this.archiveEpoch++; this.exports.clear();
+    this.generation++; this.archiveEpoch++; this.exports.clear(); this.cancelCaptures();
     await this.ready;
     return this.exclusive(async () => {
       for (const segment of [...this.segments]) {
@@ -180,5 +188,5 @@ export class TrafficLog {
       return { content, nextCursor: done ? null : cursor };
     });
   }
-  async close() { this.closed = true; this.exports.clear(); await this.queue; }
+  async close() { this.closed = true; this.exports.clear(); this.cancelCaptures(); await this.queue; }
 }

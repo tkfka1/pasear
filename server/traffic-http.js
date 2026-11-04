@@ -3,10 +3,12 @@ export function captureTraffic(log, connectionKey) {
   return (req, res, next) => {
     if (!log || !["/", "/mcp"].includes(req.path)) return next();
     const generation = log.capture();
+    req.logGeneration = generation;
     if (generation === null) return next();
     const started = Date.now(), chunks = [];
-    let bytes = 0, finished = false, tooLarge = false;
+    let bytes = 0, finished = false, tooLarge = false, release = () => {};
     const capture = (chunk, encoding) => {
+      if (!log.isCapturing(generation)) { cancel(); return; }
       if (chunk === undefined || chunk === null) return;
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, typeof encoding === "string" ? encoding : undefined);
       bytes += buffer.length;
@@ -16,8 +18,16 @@ export function captureTraffic(log, connectionKey) {
     const write = res.write, end = res.end;
     res.write = function (chunk, ...args) { capture(chunk, args[0]); return write.call(this, chunk, ...args); };
     res.end = function (chunk, ...args) { capture(chunk, args[0]); return end.call(this, chunk, ...args); };
+    const onFinish = () => complete(false), onClose = () => complete(!res.writableFinished);
+    function detach() {
+      res.write = write; res.end = end;
+      res.off("finish", onFinish); res.off("close", onClose); release();
+    }
+    function cancel() { if (finished) return; finished = true; chunks.length = 0; detach(); }
     function complete(aborted) {
-      if (finished) return; finished = true;
+      if (finished) return;
+      if (!log.isCapturing(generation)) { cancel(); return; }
+      finished = true; detach();
       let response = null;
       if (tooLarge) response = { omitted: "body_size_limit", bytes };
       else if (bytes) { try { response = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { response = { omitted: "non_json_body", bytes }; } }
@@ -34,8 +44,9 @@ export function captureTraffic(log, connectionKey) {
         request: body, response,
       }, generation, [connectionKey, bearer]);
     }
-    res.once("finish", () => complete(false));
-    res.once("close", () => complete(!res.writableFinished));
+    res.once("finish", onFinish);
+    res.once("close", onClose);
+    release = log.watchCapture(generation, cancel);
     next();
   };
 }
