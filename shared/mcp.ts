@@ -10,7 +10,7 @@ const publicMcpUrlSchema = z.string().url("올바른 HTTPS MCP 주소를 입력�
 }, "공개 주소는 https://도메인/mcp 형식이어야 합니다. 쿼리나 사용자 정보는 넣지 마세요.");
 
 export const configSchema = z.object({
-  host: z.enum(["127.0.0.1", "0.0.0.0"]).default("127.0.0.1"),
+  host: z.enum(["127.0.0.1", "0.0.0.0"]).default("0.0.0.0"),
   port: z.number().int("포트는 정수여야 합니다.").min(1024, "1024 이상의 포트를 입력하세요.").max(65535, "65535 이하의 포트를 입력하세요.").default(8787),
   connectionKey: z.string().regex(/^[a-f0-9]{64}$|^$/, "연결 비밀키 생성 버튼으로 키를 만드세요.").default(""),
   publicUrl: z.string().trim().default(""),

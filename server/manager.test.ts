@@ -24,6 +24,7 @@ test("starts only on command and stop closes its actual port", async (t) => {
   const config = configSchema.parse({ port: await freePort(), connectionKey, publicUrl });
   const status = await manager.start(config, api);
   assert.equal(status.running, true);
+  assert.equal(status.host, "0.0.0.0");
   assert.equal((await fetch(status.upstreamUrl!)).status, 401);
   assert.equal((await manager.start(config, api)).startedAt, status.startedAt);
   await manager.stop();
@@ -72,6 +73,8 @@ test("v1 and v2 settings preserve listener, public URL and secret while removing
     assert.deepEqual(configSchema.parse(await preferences.migrate!(previous, version)), { host: "0.0.0.0", port: 9000, connectionKey, publicUrl });
   }
   assert.equal(configSchema.parse({}).connectionKey, "");
+  assert.equal(configSchema.parse({}).host, "0.0.0.0");
+  assert.equal(configSchema.parse({ host: "127.0.0.1" }).host, "127.0.0.1");
 });
 
 test("incomplete drafts can be saved but malformed public URLs cannot", () => {
