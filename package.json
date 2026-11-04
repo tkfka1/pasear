@@ -1,0 +1,48 @@
+{
+  "name": "pasear",
+  "private": true,
+  "version": "0.9.0",
+  "files": [
+    "paseo-plugin.json",
+    "OVERVIEW.md",
+    "OVERVIEW.*.md",
+    "index.client.ts",
+    "index.client.tsx",
+    "index.server.ts",
+    "index.server.tsx",
+    "client/",
+    "server/",
+    "shared/",
+    "assets/"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test server/*.test.ts server/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "express": "5.3.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@getpaseo/plugin": "0.11.2",
+    "@tanstack/react-query": "^5.90.11",
+    "@types/react": "~19.2.0",
+    "@types/node": "^22.20.5",
+    "@types/express": "^5.0.0",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "typescript": "^5.9.3",
+    "tsx": "^4.23.15"
+  },
+  "description": "Control Paseo agents from web chat through an authenticated remote MCP server.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tkfka1/pasear.git"
+  },
+  "homepage": "https://github.com/tkfka1/pasear#readme",
+  "bugs": {
+    "url": "https://github.com/tkfka1/pasear/issues"
+  }
+}

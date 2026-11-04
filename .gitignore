@@ -1,0 +1,17 @@
+node_modules/
+.runtime/
+.impeccable/
+.env
+.env.*
+.npmrc
+*.log
+coverage/
+.DS_Store
+/PRODUCT.md
+/RESEARCH.md
+*.prompt.json
+*.tgz
+*.tsbuildinfo
+.cache/
+.codex/
+.claude/

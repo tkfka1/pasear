@@ -1,0 +1,24 @@
+{
+  "id": "paseo-mcp-plugin",
+  "name": "pasear",
+  "description": "Control Paseo agents from Claude, ChatGPT, Gemini, and Grok web chat.",
+  "media": [
+    "assets/screenshot.png"
+  ],
+  "requirements": {
+    "paseo": ">=0.11.2"
+  },
+  "translations": {
+    "ko": {
+      "description": "Claude·ChatGPT·Gemini·Grok 웹 채팅에서 Paseo 에이전트를 제어합니다."
+    }
+  },
+  "build": [
+    [
+      "npm",
+      "ci",
+      "--omit=dev",
+      "--ignore-scripts"
+    ]
+  ]
+}
