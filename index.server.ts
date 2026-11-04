@@ -1,5 +1,4 @@
-import type { PaseoApi } from "@getpaseo/client";
-import type { PluginServerContext } from "@getpaseo/plugin/server";
+import type { PluginServerContext, PluginHandlerContext } from "@getpaseo/plugin/server";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +6,7 @@ import { McpServerManager } from "./server/manager";
 import { OAuthStore } from "./server/oauth.js";
 import { preferences, getStatus, startServer, stopServer, generateConnectionKey, getConnections, decideConnection, revokeConnection, updateConnectionAccess, type AccessRule } from "./shared/mcp";
 
-async function validateAccessRules(accessRules: AccessRule[], paseo: PaseoApi) {
+async function validateAccessRules(accessRules: AccessRule[], paseo: PluginHandlerContext["paseo"]) {
   const projects = accessRules.some((r) => r.kind === "project") ? (await paseo.projects.list()).projects : [];
   for (const rule of accessRules) {
     if (rule.kind === "project" && !projects.some((p) => p.projectId === rule.id)) throw new Error("프로젝트를 찾지 못했습니다. 목록을 다시 조회하세요.");
