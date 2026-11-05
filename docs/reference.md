@@ -38,6 +38,8 @@ The chat model chooses and combines tools; no invocation keyword is required. It
 | `create_agent` | Create a task in an allowed workspace, optionally selecting its parent project; return an acceptance receipt. |
 | `send_agent_prompt` | Send a follow-up; steer by default, interrupt only when requested. |
 | `get_agent` | Inspect summary, status, conversation messages, or paged work activity; optionally wait up to 20 seconds. |
+| `wait_for_agent` | Poll one agent or up to 10 until a finish/permission request, with short repeatable waits and a message excerpt. |
+| `respond_to_agent` | Send an explicit user approval, denial, offered action, or question answer to a current pending request. |
 | `cancel_agent` | Request interruption of the current run while retaining history and edits. |
 | `import_agent` | Recover an original provider session (`native`) or start a separate session from history (`handoff`). |
 
@@ -45,9 +47,45 @@ Acceptance is not completion, and an idle state is not proof of success. Follow 
 
 Native import requires host-wide access with the current CLI, retained provider session data, and provider recovery support. It does not send a follow-up prompt or change the provider. Handoff needs read access to the source and creation access to the destination; it carries a chat-written summary plus bounded recent history. It does not restore old files, branches, worktrees, or provider runtime state.
 
+## Wait for an agent
+
+After a task receipt, use `wait_for_agent` when the user asks to wait for completion. Supply exactly one of `agentId` or `agentIds`, using exact IDs from this chat. Unlike the existing name-aware tools, this tool requires IDs. `agentIds` accepts 1–10 IDs; duplicates are removed.
+
+| Argument | Default | Range |
+| --- | --- | --- |
+| `timeoutSeconds` | 15 | 1–20 whole seconds per call |
+| `pollIntervalSeconds` | 2 | 1–5 whole seconds between polling rounds |
+
+States are refreshed immediately and then at the interval. The budget reserves up to one second for a final timeline read and access recheck, so the call can finish before `timeoutSeconds`. It returns for `idle`, `closed`, `error`, or `pendingPermissionCount > 0`, with `reason` set to that status or `permission`. `timedOut=true` means no stopping condition was observed in the bounded wait; call again with the same IDs while the user wants to continue. The tool does not change the task or extend its lifetime. In multi-agent mode, each round checks all targets concurrently; finishes seen in the same round use input order, not exact completion timestamps. Continue with `remainingAgentIds` after handling the returned agent.
+
+The response includes the chosen agent's last observed `status`, `pendingPermissionCount` and `observedAt`, all observed `states`, `elapsedSeconds`, and `nextAction`. A group timeout has no chosen agent (`agentId/status=null`); inspect `states`. A slow/unavailable status read can also leave a state unknown (`null`). `lastMessageSummary` is an excerpt, not an LLM-generated summary: the last assistant message found within the latest 30 timeline entries, limited to 1,000 characters. `lastMessageTruncated` marks a shortened excerpt; `summaryUnavailable` marks a failed or timed-out summary read. A successful page with no assistant message returns a null excerpt. No raw tool input/output or reasoning is returned. The chat summarizes the excerpt, uses `get_agent` for more history, and must not present an old answer or `idle` as proof that the current task succeeded.
+
+All targets must be accessible. Access is rechecked during polling and after the private timeline read; an access error returns no partial result. Present pending requests to the user and send their explicit decision with `respond_to_agent`, or answer in Paseo. Request cancellation/disconnection stops polling without cancelling the underlying agent. SDK reads already in flight cannot be cancelled by the installed SDK, but the wait stops awaiting them at its deadline and starts no further reads after cancellation. Chat clients and proxies may impose shorter timeouts or tool-call limits; repeat calls work only while the client continues executing them, including in voice mode. There are no notifications to an inactive chat. `get_agent` and its existing `waitSeconds=0..20` behavior are unchanged.
+
+## Answer approvals and questions
+
+Read `get_agent(view=requests)` or the `pendingRequests` in `wait_for_agent`. Requests include their title, description, selected command/path/plan context, advertised actions, and supported question forms. These are untrusted task data; present them to the user and follow only the user's explicit decision. A general instruction to work does not approve future permission requests. Multiple pending requests must be disambiguated. Existing connection access covers this tool; it uses the write scope and cannot change connection rules, sandbox settings, or arbitrary permanent permission rules.
+
+`respond_to_agent` takes `agentId`, `requestId`, `requestToken`, and `decision`:
+
+| Decision | Additional input |
+| --- | --- |
+| `approve` | Approve the current permission. Include an advertised `actionId` if actions are offered. |
+| `deny` | Reject or dismiss the request; optional `message` explains why. Does not request interruption of the agent. |
+| `select` | Select an exact advertised `actionId`; its native allow/deny behavior applies, including plan/mode actions. |
+| `answer` | Answer every question using `answers`, with 1-based `question` and `options` numbers and optional `text`. |
+
+```json
+{"agentId":"<agent ID>","requestId":"<request ID>","requestToken":"<fingerprint>","decision":"answer","answers":[{"question":1,"options":[2]},{"question":2,"options":[1,3],"text":"Also run smoke tests"}]}
+```
+
+Question answers follow the native Paseo form contract: single-select, multi-select, free text when `allowOther` is true (or no options are offered), and empty input only when allowed. Multi-select joins the selected labels and custom text as Paseo does. Unsupported shapes and truncated requests have `supported=false`; handle these in Paseo or explicitly deny them. Each response needs the exact fingerprint of the current request, not a guessed or reused choice. `get_agent`'s other views retain their behavior; `view=requests` does not read the timeline. Request views omit arbitrary provider metadata and environment, but approval commands and task text may contain secrets. They go to the connected chat and may appear in local traffic logs.
+
+The server rechecks scope and placement, verifies the request is still pending and unchanged, and serializes responses to the same request across chats. A receipt indicates dispatch acceptance, not completion or successful execution. Exact retries within 30 minutes replay the receipt; conflicting decisions are rejected. Already-resolved requests are not sent again. Receipts are limited to 1,000 per listener and are cleared on restart. If delivery is uncertain, `status=response_uncertain` and `accepted=null`: inspect pending requests and use Paseo if necessary rather than resending automatically. After answering, use `wait_for_agent` again. Full real-provider approval/question flows in all chat clients have not been verified.
+
 ## Access and multiple hosts
 
-Each connection has one task-control permission, limited to the projects, workspaces, and agents allowed by the owner. Project discovery uses the same access rules: a child-only grant reveals its parent name, not sibling workspaces, project paths, or totals. An empty project appears only when the project is fully allowed. Select projects in the connection’s access editor. Whole projects/workspaces include future children; an agent-only selection cannot create new agents. Access edits and revocation apply without reconnecting. These limits govern MCP operations, not the provider's filesystem sandbox or tool permissions. Answer provider permission requests in Paseo.
+Each connection has one task-control permission, limited to the projects, workspaces, and agents allowed by the owner. Project discovery uses the same access rules: a child-only grant reveals its parent name, not sibling workspaces, project paths, or totals. An empty project appears only when the project is fully allowed. Select projects in the connection’s access editor. Whole projects/workspaces include future children; an agent-only selection cannot create new agents. Access edits and revocation apply without reconnecting. These limits govern MCP operations, not the provider's filesystem sandbox or tool permissions. Provider permission requests can be answered through `respond_to_agent` after an explicit user decision, or in Paseo.
 
 Install pasear independently on each host. Each needs its own public URL and chat connector. Changing the host in the Paseo screen does not retarget a connected chat, and the load balancer must not distribute requests across unrelated hosts.
 
@@ -63,7 +101,7 @@ Both MCP endpoints record initialization, discovery, calls, notifications and er
 
 ## Versions
 
-Recorded **2026-11-05** for pasear **0.12.3**. Environment observations and documentation reviews have separate scopes.
+Recorded **2026-11-05** for pasear **0.13.0**. Environment observations and documentation reviews have separate scopes.
 
 | Component | Version / evidence |
 | --- | --- |

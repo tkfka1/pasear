@@ -4,9 +4,11 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { createMcpServer } from "./tools.js";
 import { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { PaseoOAuthProvider, SCOPES } from "./oauth.js";
+import { createAgentResponder } from "./agent-requests.js";
 
 export function createApp({ connectionKey, connection, oauthStore, publicUrl, cancelAgent, importAgent, trafficLog }) {
   const app = express();
+  const respondToAgent = createAgentResponder();
   // Serialize the entire native preflight/import/receipt flow across HTTP
   // requests for this installation, including calls from different chats.
   const imports = new Map();
@@ -60,7 +62,7 @@ export function createApp({ connectionKey, connection, oauthStore, publicUrl, ca
   app.post(mcpPaths, express.json({ limit: "256kb" }), async (req, res) => {
     // Stateless MCP supports separate web chat HTTP requests without pinning an
     // MCP session to one process. The plugin Paseo SDK connection is shared, not the MCP server.
-    const server = createMcpServer(connection, { principal: req.principal, getPrincipal: req.getPrincipal, audit: (...args) => { if (!trafficLog || trafficLog.isCapturing(req.logGeneration)) oauthStore.audit(...args); }, cancelAgent, importAgent, serializeImport });
+    const server = createMcpServer(connection, { principal: req.principal, getPrincipal: req.getPrincipal, audit: (...args) => { if (!trafficLog || trafficLog.isCapturing(req.logGeneration)) oauthStore.audit(...args); }, cancelAgent, importAgent, serializeImport, respondToAgent });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

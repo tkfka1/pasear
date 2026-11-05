@@ -13,7 +13,7 @@ Requires Paseo daemon and app 0.11.2+, plugins enabled, npm, and the local `pase
 Environment checked **2026-11-05**: Paseo CLI/daemon **0.15.0**, Node.js **24.21.0**, npm **11.19.0**. [Language, library versions and verification details](docs/reference.md#versions).
 
 ```bash
-paseo plugin add git:tkfka1/pasear --ref v0.12.3
+paseo plugin add git:tkfka1/pasear --ref v0.13.0
 ```
 
 Open **pasear** in the Paseo sidebar, then choose one connection method below.
@@ -57,6 +57,20 @@ Official setup guides for all four services checked **2026-11-05**. Live connect
 4. Enable pasear in chat (Claude: **+ → Connectors**; ChatGPT: install the plugin and select **@pasear**; Gemini: select the app or use **@pasear**), then ask: “Show my current tasks” or “Tell the login agent to run tests and summarize the result.”
 
 Menus and availability depend on your account, region and workspace policy. If the menu is missing, see the linked official guide. Each Paseo host needs its own public URL and approval. After a plugin reload, start the server again.
+
+## Wait for results
+
+Ask “Tell the login agent to run tests, wait until it finishes, then summarize the result.” The chat can call `wait_for_agent` repeatedly without asking you to check progress manually:
+
+```json
+{"agentId":"<agent ID>","timeoutSeconds":15,"pollIntervalSeconds":2}
+```
+
+Each call uses at most 20 seconds of polling/summary time (default 15), reserving time for a final message read. It stops at `idle`, `closed`, `error`, or a pending permission request. The response includes the observed state, `lastMessageSummary` (an excerpt of up to 1,000 characters for the chat to summarize), and `timedOut`. On timeout, the chat should call again with the same ID; permission requests can be answered in chat through `respond_to_agent` or in Paseo. Idle does not prove success, and the excerpt may be from a previous turn or unavailable.
+
+To watch several tasks, pass `agentIds` instead of `agentId` (up to 10). The first finish/permission observed in a polling round is returned; ties use input order. Continue with `remainingAgentIds` to collect the others. Repeated tool calls depend on the chat client continuing the conversation; this does not send background notifications. [Tool details](docs/reference.md#wait-for-an-agent)
+
+When a task asks for approval or an answer, the chat shows the pending request and choices. Say “Approve that”, “Deny it”, “Choose the second option”, or give a text answer. `respond_to_agent` forwards your explicit decision, including multi-select answers when supported, then the chat can resume waiting. Request IDs and fingerprints are handled by the chat. Unsupported or oversized forms stay in Paseo. [Response details](docs/reference.md#answer-approvals-and-questions)
 
 The logs tab provides paged traffic logs and an option to disable collection. Logs default to on and retain up to 7 days / 50 MiB; known credentials are redacted, but task text can contain sensitive data.
 

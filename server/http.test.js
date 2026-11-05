@@ -51,7 +51,7 @@ test("Claude-compatible MCP initialization and tool discovery do not require a l
   const h = await harness(t, {});
   await h.connect();
   const { tools } = await h.client.listTools();
-  assert.equal(tools.length, 10);
+  assert.equal(tools.length, 12);
   assert.ok(tools.some(({ name }) => name === "create_agent"));
   assert.ok(tools.some(({ name }) => name === "get_agent"));
   assert.ok(!tools.some(({ name }) => /kill|permission|config/.test(name)));
@@ -417,4 +417,27 @@ test("combined summary refreshes after waiting and marks truncated answers", asy
   assert.equal(result.structuredContent.lastMessage.text.length, 4000);
   assert.equal(result.structuredContent.lastMessage.truncated, true);
   assert.equal(result.structuredContent.lastMessage.turnId, "turn");
+});
+
+test("wait_for_agent over authenticated HTTP times out without cancelling and resumes on the next call", async (t) => {
+  let status = "running", refreshes = 0;
+  const h = await harness(t, { agents: { ref: (id) => ({
+    refresh: async () => { refreshes++; return {}; },
+    current: () => ({ id, status }),
+    timeline: { refetch: async () => ({ entries: [{ item: { type: "assistant_message", text: "Tests passed" } }] }) },
+    waitForFinish: async () => { throw new Error("Must use polling, not the legacy wait"); },
+    cancel: async () => { throw new Error("Must not cancel"); },
+  }) } });
+  await h.connect();
+  const args = { agentId: "a", timeoutSeconds: 1, pollIntervalSeconds: 1 };
+  const first = await h.client.callTool({ name: "wait_for_agent", arguments: args });
+  assert.equal(first.isError, undefined); assert.equal(first.structuredContent.timedOut, true);
+  assert.equal(first.structuredContent.status, "running");
+  assert.equal(first.structuredContent.next, "wait_for_agent");
+  status = "idle";
+  const second = await h.client.callTool({ name: "wait_for_agent", arguments: args });
+  assert.equal(second.isError, undefined); assert.equal(second.structuredContent.timedOut, false);
+  assert.equal(second.structuredContent.status, "idle");
+  assert.equal(second.structuredContent.lastMessageSummary, "Tests passed");
+  assert.ok(refreshes >= 4);
 });
