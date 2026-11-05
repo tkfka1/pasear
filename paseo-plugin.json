@@ -3,7 +3,8 @@
   "name": "pasear",
   "description": "Control Paseo agents from Claude, ChatGPT, Gemini, and Grok web chat.",
   "media": [
-    "assets/forest-path.png"
+    "assets/connections.png",
+    "assets/logs.png"
   ],
   "requirements": {
     "paseo": ">=0.11.2"
