@@ -10,6 +10,8 @@ Control your Paseo agents from Claude, ChatGPT, Gemini, or Grok web chat. Start 
 
 Requires Paseo daemon and app 0.11.2+, plugins enabled, npm, and the local `paseo` CLI.
 
+Environment checked **2026-11-05**: Paseo CLI/daemon **0.15.0**, Node.js **24.21.0**, npm **11.19.0**. [Language, library versions and verification details](docs/reference.md#versions).
+
 ```bash
 paseo plugin add git:tkfka1/pasear --ref v0.12.2
 ```
@@ -39,6 +41,8 @@ Funnel exposes the service publicly over HTTPS; Tailscale Serve alone is private
 ## Connect your chat
 
 Open your chat service in a browser and add a custom MCP connection:
+
+Official setup guides for all four services checked **2026-11-05**. Live connection verification is recorded in the [version details](docs/reference.md#versions).
 
 | Chat · official guide | Where to register pasear |
 | --- | --- |

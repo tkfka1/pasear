@@ -10,6 +10,8 @@ Claude·ChatGPT·Gemini·Grok 웹 채팅에서 내 Paseo 에이전트에 일을 
 
 Paseo 데몬·앱 0.11.2 이상, 플러그인 활성화, npm과 호스트의 `paseo` CLI가 필요합니다.
 
+**2026-11-05 확인 환경:** Paseo CLI·데몬 **0.15.0**, Node.js **24.21.0**, npm **11.19.0**. [언어·라이브러리 버전과 확인 범위](docs/reference.ko.md#버전).
+
 ```bash
 paseo plugin add git:tkfka1/pasear --ref v0.12.2
 ```
@@ -39,6 +41,8 @@ Funnel은 인터넷에서 접근 가능한 HTTPS 주소를 제공합니다. Tail
 ## 채팅 연결
 
 브라우저에서 사용할 웹 채팅을 열고 커스텀 MCP를 추가합니다.
+
+네 서비스의 공식 등록 안내 확인일은 **2026-11-05**입니다. 실제 연결 확인 여부는 [버전 안내](docs/reference.ko.md#버전)에 기록합니다.
 
 | 채팅 · 공식 안내 | pasear 등록 위치 |
 | --- | --- |

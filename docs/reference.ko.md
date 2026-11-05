@@ -43,6 +43,46 @@ TLS는 LB에서 종료해도 됩니다. OAuth 주소는 저장된 공개 HTTPS �
 
 워크스페이스 제한은 MCP API에서 조회·호출할 수 있는 대상의 범위입니다. 에이전트의 파일·명령 실행 샌드박스는 해당 공급자의 설정을 따릅니다. 작업 권한 요청은 Paseo에서 승인합니다.
 
+## 버전
+
+pasear **0.12.2**, 기록일 **2026-11-05** 기준입니다. 실행 환경 확인과 공식 문서 확인 범위를 구분합니다.
+
+| 항목 | 버전·확인 근거 |
+| --- | --- |
+| Paseo 최소 요구 버전 | [paseo-plugin.json](../paseo-plugin.json)에 `>=0.11.2`로 선언되어 있습니다. 해당 범위의 모든 버전을 테스트했다는 의미는 아닙니다. |
+| Paseo CLI·실행 중인 데몬 | 모두 `0.15.0`. CLI 버전과 데몬 상태로 확인했습니다. 앱 버전은 별도로 확인하지 않았습니다. |
+| Node.js·npm | 로컬 개발 환경에서 각각 `24.21.0`·`11.19.0`. |
+| 사용 언어 | TypeScript `5.9.3`, TSX, JavaScript. |
+| 컴파일러 설정 | JavaScript 대상 `ES2020`, 라이브러리 타입 `ES2023`, 모듈 `ESNext`, JSX `react-jsx`. [tsconfig.json](../tsconfig.json) 참고. |
+
+아래는 [package-lock.json](../package-lock.json)의 직접 의존성 버전이며 기록일의 로컬 설치 버전과 일치합니다. [package.json](../package.json)은 버전 범위를 선언하고, 잠금 파일에는 간접 의존성 버전도 기록됩니다.
+
+| 패키지 | 잠금 버전 | 용도 |
+| --- | --- | --- |
+| `@modelcontextprotocol/sdk` | `1.32.2` | 서버 실행: MCP 전송·프로토콜. |
+| `express` | `5.3.0` | 서버 실행: HTTP 라우팅. |
+| `zod` | `4.6.7` | 서버 실행: 스키마 검증. |
+| `@getpaseo/plugin` | `0.11.2` | 개발: Paseo 플러그인 SDK. |
+| `@tanstack/react-query` | `5.105.3` | 개발: UI 데이터 조회. |
+| `react` | `19.1.0` | 개발: UI 컴포넌트. |
+| `react-native` | `0.81.5` | 개발: UI 기본 요소. |
+| `typescript` | `5.9.3` | 개발: 타입 검사. |
+| `tsx` | `4.23.15` | 개발: TypeScript 테스트 실행. |
+| `@types/react` | `19.2.18` | 개발: React 타입. |
+| `@types/node` | `22.20.5` | 개발: Node.js 타입. |
+| `@types/express` | `5.0.6` | 개발: Express 타입. |
+
+Git 설치는 `npm ci --omit=dev --ignore-scripts`를 사용합니다. 실행 시 플러그인 SDK와 지원 UI 모듈은 Paseo가 제공하므로, 개발 의존성 버전이 호스트 앱 내부의 번들 버전을 뜻하지는 않습니다. `@types/node`는 컴파일 시 사용하는 타입 버전입니다.
+
+| 웹 채팅 | 공식 등록 안내 확인일 | 실제 연결 확인 |
+| --- | --- | --- |
+| [Claude](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) | `2026-11-05` | 사용자가 OAuth 연결 성공을 확인했습니다. 당시 테스트 날짜는 별도 기록이 없습니다. |
+| [ChatGPT](https://developers.openai.com/plugins/deploy/connect-chatgpt) | `2026-11-05` | 이 환경에서 미확인. |
+| [Gemini](https://developers.google.com/connected-apps/mcp/dev-mode/usage) | `2026-11-05` | 이 환경에서 미확인. |
+| [Grok](https://docs.x.ai/grok/connectors#custom-mcp-connectors) | `2026-11-05` | 이 환경에서 미확인. |
+
+날짜는 등록 안내를 확인한 날이며 AI 모델 버전이나 전체 작업 제어 테스트 날짜가 아닙니다. 웹 채팅의 메뉴·지원 조건은 pasear 릴리스와 별개로 변경될 수 있습니다.
+
 ## 웹 채팅 설정
 
 네 서비스의 등록 메뉴와 공통 승인 절차는 [빠른 시작의 채팅 연결](../README.ko.md#채팅-연결)을 참고하세요. OAuth 연결을 시작하면 위의 비밀키 확인과 소유자 승인을 완료해야 합니다.

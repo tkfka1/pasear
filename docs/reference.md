@@ -61,6 +61,46 @@ Recording starts enabled and persists under `$PASEO_HOME/plugin-data/paseo-mcp-p
 
 Both MCP endpoints record initialization, discovery, calls, notifications and errors, including bodies, connection identifiers, timestamps, duration and HTTP status. OAuth routes, headers, cookies and URL queries are excluded; unauthenticated requests have metadata only. Known connection keys, the request's Bearer token, and credential-named fields are redacted, including nested JSON text. Arbitrary secrets embedded in task text cannot all be detected; at-rest encryption is separate. Responses exceeding 1 MiB get a `body_size_limit` marker, and excessive nesting/complexity gets a `structure_limit` marker. The screen previews 32,000 characters per body; exports contain the complete stored record. Logs are accessible only through authenticated Paseo management RPCs, never external MCP tools. They do not capture the chat service's entire conversation.
 
+## Versions
+
+Recorded **2026-11-05** for pasear **0.12.2**. Environment observations and documentation reviews have separate scopes.
+
+| Component | Version / evidence |
+| --- | --- |
+| Paseo minimum | `>=0.11.2` declared in [paseo-plugin.json](../paseo-plugin.json); not a test of every supported version. |
+| Paseo CLI / running daemon | Both `0.15.0`, checked with CLI version and daemon status. The app's version was not independently checked. |
+| Node.js / npm | `24.21.0` / `11.19.0` in the local development environment. |
+| Languages | TypeScript `5.9.3`, TSX, and JavaScript. |
+| Compiler settings | JavaScript target `ES2020`, library types `ES2023`, modules `ESNext`, JSX `react-jsx`; see [tsconfig.json](../tsconfig.json). |
+
+Direct package versions below come from [package-lock.json](../package-lock.json) and match the local installation on the recorded date. Version ranges are declared in [package.json](../package.json); the lockfile also lists all transitive dependencies.
+
+| Package | Locked version | Usage |
+| --- | --- | --- |
+| `@modelcontextprotocol/sdk` | `1.32.2` | Server runtime: MCP transport and protocol. |
+| `express` | `5.3.0` | Server runtime: HTTP routing. |
+| `zod` | `4.6.7` | Server runtime: schema validation. |
+| `@getpaseo/plugin` | `0.11.2` | Development: Paseo plugin SDK. |
+| `@tanstack/react-query` | `5.105.3` | Development: UI data queries. |
+| `react` | `19.1.0` | Development: UI components. |
+| `react-native` | `0.81.5` | Development: UI primitives. |
+| `typescript` | `5.9.3` | Development: type checking. |
+| `tsx` | `4.23.15` | Development: TypeScript test runner. |
+| `@types/react` | `19.2.18` | Development: React types. |
+| `@types/node` | `22.20.5` | Development: Node.js types. |
+| `@types/express` | `5.0.6` | Development: Express types. |
+
+Git installation uses `npm ci --omit=dev --ignore-scripts`. Paseo supplies the plugin SDK and supported UI modules at runtime; development dependency versions do not identify the host app's bundled versions. `@types/node` describes compile-time types, not the running Node.js version.
+
+| Web chat | Official registration guide checked | Live verification |
+| --- | --- | --- |
+| [Claude](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) | `2026-11-05` | User confirmed OAuth connection; the test date was not recorded. |
+| [ChatGPT](https://developers.openai.com/plugins/deploy/connect-chatgpt) | `2026-11-05` | Not verified in this environment. |
+| [Gemini](https://developers.google.com/connected-apps/mcp/dev-mode/usage) | `2026-11-05` | Not verified in this environment. |
+| [Grok](https://docs.x.ai/grok/connectors#custom-mcp-connectors) | `2026-11-05` | Not verified in this environment. |
+
+These dates track setup documentation, not model versions or a complete task-control test. Web chat menus and availability can change independently of pasear releases.
+
 ## Develop and verify
 
 ```bash
