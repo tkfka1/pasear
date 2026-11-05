@@ -2,7 +2,7 @@
 
 Control your Paseo agents from Claude, ChatGPT, Gemini, or Grok web chat. Start tasks, send follow-ups, check progress, and summarize results.
 
-[한국어](README.ko.md) · [Detailed guide](docs/reference.md)
+[Korean](README.ko.md) · [Detailed guide](docs/reference.md)
 
 ![A sunlit forest path](assets/forest-path.png)
 
@@ -20,7 +20,7 @@ Open **pasear** in the Paseo sidebar, then choose one connection method below.
 
 1. Route a public HTTPS domain, such as `https://mcp.example.com`, to the Paseo host's HTTP port `8787` using your load balancer or reverse proxy.
 2. In pasear, use `0.0.0.0:8787` when the proxy is on another machine, or `127.0.0.1:8787` when it is on the same host.
-3. Enter the HTTPS domain in **공개 MCP 주소**, then press **저장하고 켜기**.
+3. Enter the HTTPS domain in the public MCP URL field, then save and start the server.
 
 Forward **all paths** to the listener, including `/`, `/mcp`, `/oauth/*`, `/.well-known/*`, `/authorize`, `/register`, `/token`, and `/revoke`. Preserve paths and the Authorization header.
 
@@ -32,7 +32,7 @@ On the Paseo host, [install and sign in to Tailscale](https://tailscale.com/docs
 tailscale funnel --bg http://127.0.0.1:8787
 ```
 
-Complete the Funnel enablement steps if prompted. Copy the displayed `https://<machine>.<tailnet>.ts.net` URL into pasear's **공개 MCP 주소**, select `127.0.0.1:8787` in advanced settings, and press **저장하고 켜기**.
+Complete the Funnel enablement steps if prompted. Copy the displayed `https://<machine>.<tailnet>.ts.net` URL into pasear's public MCP URL field, select `127.0.0.1:8787` in advanced settings, then save and start the server.
 
 Funnel exposes the service publicly over HTTPS; Tailscale Serve alone is private to your tailnet. See the [official Funnel guide](https://tailscale.com/docs/features/tailscale-funnel).
 
@@ -49,11 +49,11 @@ Open your chat service in a browser and add a custom MCP connection:
 
 1. Enter the same public HTTPS URL with the name **pasear**. A domain-only URL works; `/mcp` also works. Use OAuth with automatic client registration (DCR); leave client ID, client secret and custom request headers unset.
 2. Enter pasear's **connection key** in the OAuth browser window.
-3. In pasear's **연결** tab, verify the code and callback URL, select allowed projects, workspaces, or agents, and approve.
+3. In pasear's connections tab, verify the code and callback URL, select allowed projects, workspaces, or agents, and approve.
 4. Enable pasear in chat (Claude: **+ → Connectors**; ChatGPT: install the plugin and select **@pasear**; Gemini: select the app or use **@pasear**), then ask: “Show my current tasks” or “Tell the login agent to run tests and summarize the result.”
 
-Menus and availability depend on your account, region and workspace policy. If the menu is missing, see the linked official guide. Each Paseo host needs its own public URL and approval. After a plugin reload, press **서버 켜기** again.
+Menus and availability depend on your account, region and workspace policy. If the menu is missing, see the linked official guide. Each Paseo host needs its own public URL and approval. After a plugin reload, start the server again.
 
-The **로그** tab provides paged traffic logs and a **수집 안 함** option. Logs default to on and retain up to 7 days / 50 MiB; known credentials are redacted, but task text can contain sensitive data.
+The logs tab provides paged traffic logs and an option to disable collection. Logs default to on and retain up to 7 days / 50 MiB; known credentials are redacted, but task text can contain sensitive data.
 
 [MIT](LICENSE)
