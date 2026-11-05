@@ -38,12 +38,21 @@ Funnel은 인터넷에서 접근 가능한 HTTPS 주소를 제공합니다. Tail
 
 ## 채팅 연결
 
-1. 웹 채팅에 같은 공개 HTTPS 주소를 OAuth MCP 커넥터로 등록합니다. 도메인만 입력해도 되고 `/mcp`를 붙여도 됩니다. Claude에서는 **자동으로 등록(DCR)**을 선택합니다.
+브라우저에서 사용할 웹 채팅을 열고 커스텀 MCP를 추가합니다.
+
+| 채팅 · 공식 안내 | pasear 등록 위치 |
+| --- | --- |
+| [Claude](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) | **사용자 지정(Customize) → 커넥터 → 추가 → 커스텀 커넥터 추가**. 인증은 **지금 로그인**, OAuth 클라이언트는 **자동으로 등록(DCR)**을 선택합니다. |
+| [ChatGPT](https://developers.openai.com/plugins/deploy/connect-chatgpt) | **Plugins → + → Add custom MCP server**. OAuth와 자동 클라이언트 등록(DCR)을 선택하고 **Create as a plugin**으로 만듭니다. |
+| [Gemini](https://developers.google.com/connected-apps/mcp/dev-mode/usage) | **설정 → Gemini Apps Developer Mode → Choose an app → + Create new**. 주소를 입력해 연결하고 앱 이름을 정합니다. 클라이언트 인증은 DCR을 사용합니다. |
+| [Grok](https://docs.x.ai/grok/connectors#custom-mcp-connectors) | [grok.com/connectors](https://grok.com/connectors) → **New Connector → Custom**. 주소를 입력하고 OAuth 인증을 진행합니다. |
+
+1. 이름은 **pasear**, 주소는 같은 공개 HTTPS 주소를 입력합니다. 도메인만 입력해도 되고 `/mcp`를 붙여도 됩니다. 인증은 OAuth·자동 등록(DCR)을 사용하며 클라이언트 ID·시크릿·커스텀 요청 헤더는 비워 둡니다.
 2. 열린 OAuth 브라우저 창에 pasear의 **연결 비밀키**를 입력합니다.
 3. pasear의 **연결** 탭에서 확인 코드·돌아갈 주소를 확인하고, 허용할 프로젝트·워크스페이스·에이전트를 선택해 승인합니다.
-4. 채팅에서 커넥터를 선택한 뒤 “지금 작업 목록 보여줘”, “로그인 작업에 테스트하라고 하고 결과 요약해줘”처럼 말합니다.
+4. 채팅에서 pasear를 켭니다. Claude는 **+ → 커넥터**, ChatGPT는 플러그인 설치 후 **@pasear**, Gemini는 앱 선택 또는 **@pasear**를 사용합니다. “지금 작업 목록 보여줘”, “로그인 작업에 테스트하라고 하고 결과 요약해줘”처럼 말하세요.
 
-커넥터 지원 여부는 웹 채팅 서비스·계정에 따라 다릅니다. 호스트마다 공개 주소와 승인이 필요하며, 플러그인 리로드 후에는 **서버 켜기**를 다시 누릅니다.
+메뉴와 지원 여부는 계정·지역·워크스페이스 정책에 따라 다릅니다. 메뉴가 없다면 위 공식 안내에서 조건을 확인하세요. 호스트마다 공개 주소와 승인이 필요하며, 플러그인 리로드 후에는 **서버 켜기**를 다시 누릅니다.
 
 **로그** 탭에서 페이지별 기록 조회와 **수집 안 함**을 선택할 수 있습니다. 기본 수집은 켜져 있고 최근 7일·최대 50MiB를 보관합니다. 알려진 인증 값은 가리지만 작업 본문에는 민감한 내용이 포함될 수 있습니다.
 

@@ -45,14 +45,14 @@ TLS는 LB에서 종료해도 됩니다. OAuth 주소는 저장된 공개 HTTPS �
 
 ## 웹 채팅 설정
 
-| 대상 | 연결 방법과 조건 |
-| --- | --- |
-| Claude | 커스텀 커넥터에 공개 주소를 등록하고 OAuth 자동 등록을 선택합니다. 별도의 API 키나 요청 헤더는 설정하지 않습니다. |
-| ChatGPT | 커스텀 MCP 서버에 공개 주소와 OAuth를 설정하고 DCR을 선택합니다. 사용자·워크스페이스 권한에 따라 메뉴가 달라질 수 있습니다. 고정 API 키 입력 방식은 지원 경로가 아닙니다. |
-| Grok | [Connectors](https://grok.com/connectors) → New Connector → Custom에서 같은 MCP 주소를 등록하고 OAuth로 연결합니다. |
-| Gemini | Connected Apps의 Custom apps에 공개 주소를 등록합니다. 현재 공식 도움말에 미국·18세 이상·개인 계정·영어·Keep Activity 켜짐 등의 조건이 있습니다. |
+네 서비스의 등록 메뉴와 공통 승인 절차는 [빠른 시작의 채팅 연결](../README.ko.md#채팅-연결)을 참고하세요. OAuth 연결을 시작하면 위의 비밀키 확인과 소유자 승인을 완료해야 합니다.
 
-공식 안내: [Claude](https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp), [ChatGPT 커스텀 MCP](https://developers.openai.com/api/docs/guides/custom-mcp-server), [OpenAI 인증](https://developers.openai.com/plugins/build/auth), [Gemini](https://support.google.com/gemini/answer/17209137?hl=en-PR). [Grok 공식 안내](https://docs.x.ai/grok/connectors#custom-mcp-connectors). 실제 연결 시 최신 조건을 확인하세요.
+- **Claude:** 추천으로 표시되는 게시된 ID(CIMD) 대신 자동 등록(DCR)을 선택합니다. 조직 계정은 관리자가 먼저 커넥터를 추가해야 할 수 있습니다.
+- **ChatGPT:** 새 화면은 Plugins에서 등록합니다. 기존 Apps 화면을 사용하는 계정은 사용자 설정 또는 워크스페이스 설정의 **Apps → Create**에서 OAuth 연결·도구 스캔 후 생성합니다. 생성 권한은 계정과 워크스페이스 정책을 따릅니다.
+- **Gemini:** [개발자 모드](https://gemini.google.com/devmode)의 **Authentication → Client Authentication Configuration**에서 **Dynamic Client Registration**을 선택할 수 있습니다. 수동 클라이언트 등록은 필요하지 않습니다.
+- **Grok:** 등록 후 서버가 제공하는 도구를 검색해 대화에서 사용합니다. 조직 계정은 관리자의 커넥터 구성이 먼저 필요할 수 있습니다.
+
+메뉴가 보이지 않거나 연결에 실패하면 README에 연결된 각 서비스의 공식 안내와 현재 계정 조건을 확인하세요. 고정 API 키 인증이나 커스텀 요청 헤더 대신 pasear의 OAuth 승인 절차를 사용합니다.
 
 ## 작업 제어
 

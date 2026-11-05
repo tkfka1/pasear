@@ -38,12 +38,21 @@ Funnel exposes the service publicly over HTTPS; Tailscale Serve alone is private
 
 ## Connect your chat
 
-1. Add the same public HTTPS URL as an OAuth MCP connector. A domain-only URL works; `/mcp` also works. In Claude, choose **Automatically register** (DCR).
+Open your chat service in a browser and add a custom MCP connection:
+
+| Chat · official guide | Where to register pasear |
+| --- | --- |
+| [Claude](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) | **Customize → Connectors → + Add → Add custom connector**. Choose **Sign in now → Register automatically** (DCR). |
+| [ChatGPT](https://developers.openai.com/plugins/deploy/connect-chatgpt) | **Plugins → + → Add custom MCP server**. Choose OAuth and automatic client registration (DCR), then **Create as a plugin**. |
+| [Gemini](https://developers.google.com/connected-apps/mcp/dev-mode/usage) | **Settings → Gemini Apps Developer Mode → Choose an app → + Create new**. Enter the URL, connect and name the app; use DCR for client authentication. |
+| [Grok](https://docs.x.ai/grok/connectors#custom-mcp-connectors) | [grok.com/connectors](https://grok.com/connectors) → **New Connector → Custom**. Enter the URL and complete OAuth authentication. |
+
+1. Enter the same public HTTPS URL with the name **pasear**. A domain-only URL works; `/mcp` also works. Use OAuth with automatic client registration (DCR); leave client ID, client secret and custom request headers unset.
 2. Enter pasear's **connection key** in the OAuth browser window.
 3. In pasear's **연결** tab, verify the code and callback URL, select allowed projects, workspaces, or agents, and approve.
-4. Select the connector in chat and ask: “Show my current tasks” or “Tell the login agent to run tests and summarize the result.”
+4. Enable pasear in chat (Claude: **+ → Connectors**; ChatGPT: install the plugin and select **@pasear**; Gemini: select the app or use **@pasear**), then ask: “Show my current tasks” or “Tell the login agent to run tests and summarize the result.”
 
-Connector availability depends on the chat service and account. Each Paseo host needs its own public URL and approval. After a plugin reload, press **서버 켜기** again.
+Menus and availability depend on your account, region and workspace policy. If the menu is missing, see the linked official guide. Each Paseo host needs its own public URL and approval. After a plugin reload, press **서버 켜기** again.
 
 The **로그** tab provides paged traffic logs and a **수집 안 함** option. Logs default to on and retain up to 7 days / 50 MiB; known credentials are redacted, but task text can contain sensitive data.
 

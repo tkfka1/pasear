@@ -2,6 +2,17 @@
 
 [Quick start](../README.md) · [한국어](reference.ko.md)
 
+## Register in web chat
+
+See [Connect your chat](../README.md#connect-your-chat) for the four services' registration menus, official guides, and the shared OAuth approval flow.
+
+- **Claude:** choose automatic registration (DCR), rather than the recommended published identity (CIMD). Organization accounts may require an administrator to add the connector first.
+- **ChatGPT:** use Plugins in the current interface. In the legacy interface, authorized users can use **Settings → Apps → Create**, or administrators can use workspace settings; configure OAuth, scan tools, and create the app. Account and workspace policies determine access.
+- **Gemini:** in [Developer Mode](https://gemini.google.com/devmode), select **Authentication → Client Authentication Configuration → Dynamic Client Registration**. Manual client registration is unnecessary.
+- **Grok:** tools are discovered after registration and become available in conversations. Organization accounts may need administrator provisioning first.
+
+Use pasear's OAuth flow instead of fixed API keys or custom request headers. Follow the linked official guides for current account requirements and missing-menu troubleshooting.
+
 ## Use it conversationally
 
 Select the connector in your chat, then ask naturally:
