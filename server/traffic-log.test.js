@@ -53,7 +53,7 @@ test("disable survives reload, enabling is immediate, and clearing cannot resurr
   await log.configure(false); record(log, entry()); assert.equal((await log.list()).entries.length, 1);
   const reopened = new TrafficLog(directory); await reopened.ready; assert.equal((await reopened.status()).enabled, false); await reopened.close();
   await log.configure(true); record(log, entry()); assert.equal((await log.list()).entries.length, 2);
-  const selected = (await log.list()).entries[0].id; await log.clear(); await assert.rejects(log.detail(selected), /정리|삭제/); await assert.rejects(log.list({ before: selected }), /정리|삭제/);
+  const selected = (await log.list()).entries[0].id; await log.clear(); await assert.rejects(log.detail(selected), /expired|deleted/); await assert.rejects(log.list({ before: selected }), /expired|deleted/);
 });
 
 test("rotation bounds disk usage and retention cleans old segments on startup without erasing current records", async (t) => {
@@ -75,7 +75,7 @@ test("filtered JSONL export has a stable snapshot, chunks large Unicode data and
   do { const page = await log.exportPage({ cursor }); text += page.content; cursor = page.nextCursor; } while (cursor);
   const rows = text.split("\n").filter(Boolean).map((line) => JSON.parse(line)); assert.equal(rows.length, 1); assert.equal(rows[0].response, "산책🐶".repeat(18000));
   assert.equal((await exportAll(log)).length, 3);
-  const next = await log.exportPage(); assert.ok(next.nextCursor); await log.clear(); await assert.rejects(log.exportPage({ cursor: next.nextCursor }), /만료|삭제/);
+  const next = await log.exportPage(); assert.ok(next.nextCursor); await log.clear(); await assert.rejects(log.exportPage({ cursor: next.nextCursor }), /expired|deleted/);
 });
 
 test("queue pressure and filesystem errors are visible without breaking MCP caller code", async (t) => {
@@ -84,7 +84,7 @@ test("queue pressure and filesystem errors are visible without breaking MCP call
   const brokenPath = join(directory, "blocked"); await writeFile(brokenPath, "file");
   const broken = new TrafficLog(brokenPath); await broken.ready;
   assert.doesNotThrow(() => record(broken, entry())); const state = await broken.status(); assert.equal(state.dropped, 1); assert.ok(state.error);
-  await assert.rejects(broken.configure(false), /설정/); await broken.close();
+  await assert.rejects(broken.configure(false), /settings/); await broken.close();
 });
 
 test("HTTP logs capture authenticated MCP requests and replies, protocol errors and notices while excluding OAuth traffic and untrusted credentials", async (t) => {

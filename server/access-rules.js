@@ -5,7 +5,7 @@ export function normalizeAccessRules(rules) {
       || typeof r.id !== "string" || !r.id || r.id.length > 200
       || (r.kind === "all" && r.id !== "*")
       || (r.kind === "agent" && (typeof r.workspaceId !== "string" || !r.workspaceId || r.workspaceId.length > 200)))) {
-    throw new Error("허용할 프로젝트·워크스페이스·에이전트를 선택하세요. 최대 100개까지 지정할 수 있습니다.");
+    throw new Error("Select allowed projects, workspaces or agents. You can select up to 100 targets.");
   }
   return [...new Map(rules.map((r) => [`${r.kind}:${r.id}`, r.kind === "agent"
     ? { kind: r.kind, id: r.id, workspaceId: r.workspaceId } : { kind: r.kind, id: r.id }])).values()];

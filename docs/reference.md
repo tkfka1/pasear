@@ -63,7 +63,7 @@ Both MCP endpoints record initialization, discovery, calls, notifications and er
 
 ## Versions
 
-Recorded **2026-11-05** for pasear **0.12.2**. Environment observations and documentation reviews have separate scopes.
+Recorded **2026-11-05** for pasear **0.12.3**. Environment observations and documentation reviews have separate scopes.
 
 | Component | Version / evidence |
 | --- | --- |

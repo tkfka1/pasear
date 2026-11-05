@@ -49,7 +49,7 @@ export class TrafficLog {
         if (info.isFile()) { await chmod(join(directory, name), 0o600); this.segments.push({ name, bytes: info.size, modified: info.mtimeMs, sealed: true }); }
       }
       await this.prune();
-    }).catch(() => { this.error = "로그 저장소를 열지 못했습니다. 호스트의 디스크와 파일 권한을 확인하세요."; });
+    }).catch(() => { this.error = "Could not open log storage. Check the host disk and file permissions."; });
   }
   /** @template T @param {() => T | Promise<T>} work @returns {Promise<T>} */
   exclusive(work) { const result = this.queue.then(work); this.queue = result.catch(() => {}); return result; }
@@ -75,7 +75,7 @@ export class TrafficLog {
     if (this.closed || generation === null || generation !== this.generation || !this.enabled) return;
     let line;
     try { line = JSON.stringify({ id: randomUUID(), ...redact(entry, secrets) }) + "\n"; }
-    catch { this.dropped++; this.error = "로그 내용을 처리하지 못했습니다."; return; }
+    catch { this.dropped++; this.error = "Could not process the log entry."; return; }
     const bytes = Buffer.byteLength(line);
     if (bytes > this.limits.segmentBytes || this.queuedBytes + bytes > this.limits.queueBytes) { this.dropped++; return; }
     this.queuedBytes += bytes;
@@ -93,11 +93,11 @@ export class TrafficLog {
         await appendFile(join(this.directory, segment.name), line, { mode: 0o600 });
         segment.bytes += bytes; segment.modified = Date.now();
         await this.prune(); this.error = null;
-      } catch { if (this.segments.length) this.segments.at(-1).sealed = true; this.dropped++; this.error = "로그를 저장하지 못했습니다. 호스트의 디스크와 파일 권한을 확인하세요."; }
+      } catch { if (this.segments.length) this.segments.at(-1).sealed = true; this.dropped++; this.error = "Could not save logs. Check the host disk and file permissions."; }
     }).finally(() => { this.queuedBytes -= bytes; });
   }
   state() { return { enabled: this.enabled, retentionDays: this.limits.retentionDays, maxBytes: this.limits.maxBytes, storedBytes: this.segments.reduce((n, s) => n + s.bytes, 0), dropped: this.dropped, error: this.error }; }
-  async status() { await this.ready; return this.exclusive(async () => { try { await this.prune(); } catch { this.error = "오래된 로그를 정리하지 못했습니다. 호스트의 파일 권한을 확인하세요."; } return this.state(); }); }
+  async status() { await this.ready; return this.exclusive(async () => { try { await this.prune(); } catch { this.error = "Could not remove old logs. Check the host file permissions."; } return this.state(); }); }
   async configure(enabled) {
     await this.ready;
     return this.exclusive(async () => {
@@ -106,7 +106,7 @@ export class TrafficLog {
         await mkdir(this.directory, { recursive: true, mode: 0o700 });
         await writeFile(temporary, JSON.stringify({ enabled }), { mode: 0o600, flag: "wx" });
         await rename(temporary, join(this.directory, "settings.json"));
-      } catch { await unlink(temporary).catch(() => {}); throw Error("로그 설정을 저장하지 못했습니다. 디스크와 파일 권한을 확인하세요."); }
+      } catch { await unlink(temporary).catch(() => {}); throw Error("Could not save log settings. Check disk and file permissions."); }
       this.enabled = enabled; this.generation++; this.cancelCaptures(); return this.state();
     });
   }
@@ -117,7 +117,7 @@ export class TrafficLog {
     return this.exclusive(async () => {
       for (const segment of [...this.segments]) {
         try { await unlink(join(this.directory, segment.name)); }
-        catch (e) { if (e.code !== "ENOENT") throw Error("로그를 삭제하지 못했습니다. 파일 권한을 확인하고 다시 시도하세요."); }
+        catch (e) { if (e.code !== "ENOENT") throw Error("Could not delete logs. Check file permissions and try again."); }
         this.segments = this.segments.filter((s) => s.name !== segment.name);
       }
       this.error = null; this.dropped = 0; return this.state();
@@ -142,7 +142,7 @@ export class TrafficLog {
         }
         if (hasMore) break;
       }
-      if (!found) throw Error("로그가 정리되었거나 삭제되었습니다. 최신 로그를 다시 불러오세요.");
+      if (!found) throw Error("These logs have expired or been deleted. Reload the latest logs.");
       return { entries, nextCursor: hasMore ? entries.at(-1).id : null };
     });
   }
@@ -154,7 +154,7 @@ export class TrafficLog {
         const row = (await this.rows(segment)).find((r) => r.id === id && this.matches(r, {}));
         if (row) return row;
       }
-      throw Error("로그가 정리되었거나 삭제되었습니다. 최신 로그를 다시 불러오세요.");
+      throw Error("These logs have expired or been deleted. Reload the latest logs.");
     });
   }
   async exportPage({ cursor, connectionId, connection, tool } = {}) {
@@ -163,12 +163,12 @@ export class TrafficLog {
       await this.prune();
       let session;
       if (!cursor) {
-        if (this.exports.size >= 3) throw Error("로그 다운로드가 진행 중입니다. 잠시 후 다시 시도하세요.");
+        if (this.exports.size >= 3) throw Error("Log downloads are in progress. Try again shortly.");
         cursor = randomUUID();
         session = { epoch: this.archiveEpoch, expires: Date.now() + 300000, files: this.segments.map((s) => ({ ...s })), index: 0, lines: [], remainder: "", filter: { connectionId, connection, tool } };
         this.exports.set(cursor, session);
       } else session = this.exports.get(cursor);
-      if (!session || session.epoch !== this.archiveEpoch) throw Error("다운로드가 만료되었거나 로그가 삭제되었습니다. 다시 내려받으세요.");
+      if (!session || session.epoch !== this.archiveEpoch) throw Error("The download expired or the logs were deleted. Download again.");
       let content = "";
       while (content.length < 32768) {
         if (session.remainder) { const n = 32768 - content.length; content += session.remainder.slice(0, n); session.remainder = session.remainder.slice(n); continue; }
@@ -181,7 +181,7 @@ export class TrafficLog {
         if (session.index === session.files.length) break;
         const file = session.files[session.index++];
         try { const data = await readFile(join(this.directory, file.name)); session.lines = data.subarray(0, file.bytes).toString("utf8").split("\n").filter(Boolean); }
-        catch { this.exports.delete(cursor); throw Error("로그가 정리되었습니다. 다시 내려받으세요."); }
+        catch { this.exports.delete(cursor); throw Error("The logs have expired. Download again."); }
       }
       const done = !session.remainder && !session.lines.length && session.index === session.files.length;
       if (done) this.exports.delete(cursor); else session.expires = Date.now() + 300000;

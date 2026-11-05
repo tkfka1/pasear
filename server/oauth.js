@@ -34,7 +34,7 @@ export class OAuthStore {
         if (data.version !== 1 || !data.clients || !data.grants || !data.access || !data.refresh) throw new Error("Invalid OAuth state");
         this.data = data;
       } catch (error) {
-        if (error.code !== "ENOENT") throw new Error("OAuth 저장 파일을 읽지 못했습니다. 파일 권한과 형식을 확인하세요.");
+        if (error.code !== "ENOENT") throw new Error("Could not read OAuth storage. Check file permissions and format.");
       }
     }
     let changed = false;
@@ -86,14 +86,14 @@ export class OAuthStore {
   decide(id, allow, workspaceIds, accessRules) {
     this.prune();
     const pending = this.pending.get(id);
-    if (!pending || pending.decision !== "pending") throw new Error("연결 요청이 만료되었거나 이미 처리되었습니다. 웹 채팅에서 다시 연결하세요.");
-    if (!pending.keyHash) throw new Error("연결 비밀키 확인을 먼저 완료하세요.");
+    if (!pending || pending.decision !== "pending") throw new Error("This connection request expired or was already handled. Reconnect from your web chat.");
+    if (!pending.keyHash) throw new Error("Verify the connection key first.");
     if (!allow) { pending.decision = "denied"; return; }
     const rules = accessRules === undefined ? undefined : normalizeAccessRules(accessRules);
-    if (!rules && workspaceIds !== null && (!Array.isArray(workspaceIds) || !workspaceIds.length || workspaceIds.length > 100 || workspaceIds.some((id) => typeof id !== "string" || !id || id.length > 200))) throw new Error("허용할 워크스페이스를 선택하세요.");
-    if (Object.values(this.data.grants).filter((g) => !g.revoked && g.expiresAt > now()).length >= 100) throw new Error("연결 수가 너무 많습니다. 사용하지 않는 연결을 해제하세요.");
+    if (!rules && workspaceIds !== null && (!Array.isArray(workspaceIds) || !workspaceIds.length || workspaceIds.length > 100 || workspaceIds.some((id) => typeof id !== "string" || !id || id.length > 200))) throw new Error("Select allowed workspaces.");
+    if (Object.values(this.data.grants).filter((g) => !g.revoked && g.expiresAt > now()).length >= 100) throw new Error("Too many connections. Disconnect unused chats.");
     const scopes = [...pending.params.scopes];
-    if (!hasControl(scopes)) throw new Error("작업 제어 권한이 필요합니다. 웹 채팅에서 모든 권한을 요청해 다시 연결하세요.");
+    if (!hasControl(scopes)) throw new Error("Task control permission is required. Reconnect from your web chat with all required permissions.");
     pending.decision = "approved";
     pending.grant = {
       id: randomUUID(), clientId: pending.clientId, clientName: pending.clientName,
@@ -111,10 +111,10 @@ export class OAuthStore {
   updateAccess(id, workspaceIds, agentIds, revision, accessRules) {
     this.prune();
     const grant = this.data.grants[id];
-    if (!grant || grant.revoked) throw new Error("연결이 해제되었거나 만료되었습니다. 목록을 다시 조회하세요.");
-    if ((grant.accessRevision ?? 0) !== revision) throw new Error("다른 곳에서 접근 범위를 변경했습니다. 편집을 닫고 다시 열어주세요.");
+    if (!grant || grant.revoked) throw new Error("This connection was revoked or expired. Refresh the list.");
+    if ((grant.accessRevision ?? 0) !== revision) throw new Error("Access changed elsewhere. Close the editor and open it again.");
     for (const ids of [workspaceIds, agentIds]) {
-      if (ids !== null && (!Array.isArray(ids) || !ids.length || ids.length > 100 || ids.some((id) => typeof id !== "string" || !id || id.length > 200))) throw new Error("허용할 대상을 하나 이상 선택하세요. 최대 100개까지 지정할 수 있습니다.");
+      if (ids !== null && (!Array.isArray(ids) || !ids.length || ids.length > 100 || ids.some((id) => typeof id !== "string" || !id || id.length > 200))) throw new Error("Select at least one allowed target, up to 100.");
     }
     if (accessRules !== undefined) {
       grant.accessRules = normalizeAccessRules(accessRules);
@@ -157,7 +157,7 @@ export class OAuthStore {
 
 export class PaseoOAuthProvider {
   constructor(store, resource, connectionKey) {
-    if (!/^[a-f0-9]{64}$/.test(connectionKey ?? "")) throw new Error("연결 비밀키가 필요합니다.");
+    if (!/^[a-f0-9]{64}$/.test(connectionKey ?? "")) throw new Error("A connection key is required.");
     this.store = store;
     this.resource = new URL(resource).href;
     // Both paths name this same installation. Keep existing grant audiences
@@ -204,28 +204,28 @@ export class PaseoOAuthProvider {
     res.redirect(303, new URL(`/oauth/flow/${id}`, this.resource).href);
   }
   admissionPage(entry, res, error = "", status = 200) {
-    return authorizationPage(res, { title: "연결 비밀키 확인", status, body: `
-      <p>pasear 메인 화면의 연결에서 복사한 비밀키를 입력하세요. 키가 확인된 요청만 Paseo에 표시됩니다.</p>
-      <dl><dt>요청 앱 · 등록자가 제공한 이름</dt><dd>${escape(entry.clientName)}</dd><dt>돌아갈 주소</dt><dd>${escape(entry.params.redirectUri)}</dd></dl>
+    return authorizationPage(res, { title: "Verify connection key", status, body: `
+      <p>Enter the connection key copied from the Connections tab in pasear. Only requests with a verified key appear in Paseo.</p>
+      <dl><dt>Requesting app · Name supplied by its registrant</dt><dd>${escape(entry.clientName)}</dd><dt>Callback URL</dt><dd>${escape(entry.params.redirectUri)}</dd></dl>
       ${error ? `<p role="alert">${escape(error)}</p>` : ""}
       <form method="post" action="/oauth/flow/${escape(entry.id)}"><input type="hidden" name="csrf" value="${escape(entry.csrf)}">
-      <label for="connection-key">연결 비밀키</label><input id="connection-key" type="password" name="connection_key" required maxlength="64" autocomplete="off" autocapitalize="none" spellcheck="false">
-      <button type="submit">키 확인 후 승인 요청</button></form><p>키 확인 후 Paseo 메인 화면에서 허용할 워크스페이스를 선택하고 연결을 승인하세요. 승인하면 작업 요청·메시지 전송·중단이 허용됩니다. 요청은 5분 뒤 만료됩니다.</p>` });
+      <label for="connection-key">Connection key</label><input id="connection-key" type="password" name="connection_key" required maxlength="64" autocomplete="off" autocapitalize="none" spellcheck="false">
+      <button type="submit">Verify key and request approval</button></form><p>After verifying the key, choose allowed projects, workspaces or agents in Paseo and approve the connection. Approval allows task creation, messages and cancellation for those targets. This request expires after 5 minutes.</p>` });
   }
   admit(id, body, origin, res) {
     this.store.prune();
     const entry = this.store.admissions.get(id);
-    if (!entry) return authorizationPage(res, { title: "연결 요청 만료", status: 410, body: "<p>웹 채팅에서 연결을 다시 시작하세요.</p>" });
+    if (!entry) return authorizationPage(res, { title: "Connection request expired", status: 410, body: "<p>Start the connection again from your web chat.</p>" });
     if (origin !== new URL(this.resource).origin || typeof body?.csrf !== "string" || !matches(body.csrf, entry.csrf)) {
-      return authorizationPage(res, { title: "연결 요청 확인 실패", status: 403, body: "<p>웹 채팅에서 연결을 다시 시작하세요.</p>" });
+      return authorizationPage(res, { title: "Connection verification failed", status: 403, body: "<p>Start the connection again from your web chat.</p>" });
     }
     entry.attempts++;
     if (typeof body.connection_key !== "string" || body.connection_key.length !== 64 || !matches(digest(body.connection_key), this.keyHash)) {
       if (entry.attempts >= 5) {
         this.store.admissions.delete(id);
-        return authorizationPage(res, { title: "연결 요청 잠김", status: 429, body: "<p>비밀키 확인에 5회 실패했습니다. 웹 채팅에서 연결을 다시 시작하세요.</p>" });
+        return authorizationPage(res, { title: "Connection request locked", status: 429, body: "<p>Key verification failed 5 times. Start the connection again from your web chat.</p>" });
       }
-      return this.admissionPage(entry, res, "연결 비밀키가 일치하지 않습니다. Paseo 설정에서 키를 확인하세요.", 401);
+      return this.admissionPage(entry, res, "The connection key does not match. Check the key in pasear settings.", 401);
     }
     this.store.admissions.delete(id);
     this.store.pending.set(id, {
@@ -242,7 +242,7 @@ export class PaseoOAuthProvider {
     res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'", "X-Content-Type-Options": "nosniff" });
     if (!pending) return res.status(410).type("text").send("This connection request expired. Start again from your web chat.");
     if (pending.decision === "pending") {
-      return authorizationPage(res, { title: "Paseo에서 연결 승인", refresh: true, body: `<p>비밀키 확인이 완료됐습니다. Paseo의 pasear 메인 화면에서 같은 코드와 돌아갈 주소를 확인하고 승인하세요.</p><dl><dt>확인 코드</dt><dd>${escape(pending.displayCode)}</dd><dt>요청 앱 · 등록자가 제공한 이름</dt><dd>${escape(pending.clientName)}</dd><dt>돌아갈 주소</dt><dd>${escape(pending.params.redirectUri)}</dd></dl><p>승인하면 선택한 워크스페이스의 작업 요청·메시지 전송·중단을 허용합니다. 직접 시작한 요청인지 확인하세요. 승인 후 이 창은 웹 채팅으로 돌아갑니다.</p>` });
+      return authorizationPage(res, { title: "Approve connection in Paseo", refresh: true, body: `<p>The key is verified. Open pasear in Paseo, check that the code and callback URL match, then approve.</p><dl><dt>Verification code</dt><dd>${escape(pending.displayCode)}</dd><dt>Requesting app · Name supplied by its registrant</dt><dd>${escape(pending.clientName)}</dd><dt>Callback URL</dt><dd>${escape(pending.params.redirectUri)}</dd></dl><p>Approval allows task creation, messages and cancellation for the selected targets. Make sure you started this request. This window returns to your web chat after approval.</p>` });
     }
     this.store.pending.delete(id);
     const redirect = new URL(pending.params.redirectUri);

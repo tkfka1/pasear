@@ -6,7 +6,7 @@ import { clearLogs, configureLogs, exportLogs, getLogDetail, getLogStatus, listL
 import { Action, type Colors } from "./controls";
 import { downloadText } from "./web";
 
-const outcomes = { ok: "정상", error: "오류", unauthorized: "인증 거부", aborted: "연결 중단" };
+const outcomes = { ok: "Success", error: "Error", unauthorized: "Unauthorized", aborted: "Aborted" };
 const size = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 function Detail({ id, hostId, colors }: { id: string; hostId: string; colors: Colors }) {
@@ -14,26 +14,26 @@ function Detail({ id, hostId, colors }: { id: string; hostId: string; colors: Co
   const detail = useQuery({ queryKey: ["pasear-log-detail", hostId, id], queryFn: () => rpc({ id }), retry: false });
   const [notice, setNotice] = useState("");
   const text = { color: colors.foreground, fontSize: 13, lineHeight: 21 };
-  if (detail.isPending) return <Text style={text}>상세 기록을 불러오는 중…</Text>;
-  if (detail.error) return <View style={{ gap: 8 }}><Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>기록을 불러오지 못했습니다. 삭제되었거나 호스트 연결이 끊겼을 수 있습니다.</Text><Action colors={colors} label="상세 기록 다시 불러오기" onPress={() => { void detail.refetch(); }} /></View>;
+  if (detail.isPending) return <Text style={text}>Loading log details…</Text>;
+  if (detail.error) return <View style={{ gap: 8 }}><Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>Could not load this record. It may have been deleted or the host disconnected.</Text><Action colors={colors} label="Reload details" onPress={() => { void detail.refetch(); }} /></View>;
   const row = detail.data!;
   const content = JSON.stringify(row, null, 2);
   return <View style={{ gap: 12 }}>
-    <Text selectable style={text}>연결 ID · {row.connectionId ?? "미인증"}</Text>
+    <Text selectable style={text}>Connection ID · {row.connectionId ?? "Unauthenticated"}</Text>
     <Text style={text}>{row.httpMethod} {row.path} · HTTP {row.status}</Text>
-    {([['요청', row.request], ['응답', row.response]] as const).map(([label, body]) => {
+    {([['Request', row.request], ['Response', row.response]] as const).map(([label, body]) => {
       const value = JSON.stringify(body, null, 2) ?? "null";
       return <View key={label} style={{ gap: 6 }}>
         <Text style={{ ...text, fontWeight: "600" }}>{label}</Text>
         <ScrollView style={{ maxHeight: 300, backgroundColor: colors.surface1, borderRadius: 8 }} nestedScrollEnabled>
           <ScrollView horizontal contentContainerStyle={{ padding: 12 }}><Text selectable style={{ ...text, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }}>{value.slice(0, 32000)}</Text></ScrollView>
         </ScrollView>
-        {value.length > 32000 ? <Text style={text}>화면에는 앞부분만 표시합니다. 저장된 전체 내용은 내려받기·공유로 확인하세요.</Text> : null}
+        {value.length > 32000 ? <Text style={text}>Showing a preview. Download or share the record to view the full stored content.</Text> : null}
       </View>;
     })}
-    <Action colors={colors} label={Platform.OS === "web" ? "이 기록 내려받기" : "이 기록 공유"} onPress={() => {
-      if (Platform.OS === "web") setNotice(downloadText([JSON.stringify(row) + "\n"], `pasear-${id}.jsonl`) ? "기록을 내려받았습니다." : "내려받지 못했습니다. 브라우저의 다운로드 설정을 확인하세요.");
-      else void Share.share({ message: content, title: "pasear 통신 기록" }).catch(() => setNotice("공유하지 못했습니다. 텍스트를 길게 눌러 복사하세요."));
+    <Action colors={colors} label={Platform.OS === "web" ? "Download record" : "Share record"} onPress={() => {
+      if (Platform.OS === "web") setNotice(downloadText([JSON.stringify(row) + "\n"], `pasear-${id}.jsonl`) ? "Record downloaded." : "Download failed. Check your browser download settings.");
+      else void Share.share({ message: content, title: "pasear traffic log" }).catch(() => setNotice("Could not share. Press and hold the text to copy it."));
     }} />
     {notice ? <Text accessibilityLiveRegion="polite" style={text}>{notice}</Text> : null}
   </View>;
@@ -65,12 +65,12 @@ export function Logs({ colors, hostId, active, onNavigate }: { colors: Colors; h
     if (kind === "clear") {
       const result = await clearRpc({}); setCursors([undefined]); setSelected(null); setConfirmDelete(false);
       cache.removeQueries({ queryKey: ["pasear-log-detail", hostId] });
-      await cache.resetQueries({ queryKey: ["pasear-logs", hostId] }); setNotice("저장된 로그를 삭제했습니다."); return result;
+      await cache.resetQueries({ queryKey: ["pasear-logs", hostId] }); setNotice("Saved logs deleted."); return result;
     }
     const parts: string[] = []; let cursor: string | undefined;
     do { const page = await exportRpc({ ...applied, cursor }); parts.push(page.content); cursor = page.nextCursor ?? undefined; } while (cursor);
-    if (!downloadText(parts, `pasear-logs-${new Date().toISOString().slice(0, 10)}.jsonl`)) throw Error("내려받지 못했습니다. 브라우저의 다운로드 설정을 확인하세요.");
-    setNotice("조회 조건에 맞는 로그를 내려받았습니다.");
+    if (!downloadText(parts, `pasear-logs-${new Date().toISOString().slice(0, 10)}.jsonl`)) throw Error("Download failed. Check your browser download settings.");
+    setNotice("Matching logs downloaded.");
   }, onSuccess: (result) => { if (result) cache.setQueryData(stateKey, result); }, onSettled: () => { void state.refetch(); } });
   const text = { color: colors.foreground, fontSize: 14, lineHeight: 22 };
   const muted = { color: colors.foregroundMuted, fontSize: 13, lineHeight: 21 };
@@ -82,10 +82,10 @@ export function Logs({ colors, hostId, active, onNavigate }: { colors: Colors; h
     void cache.resetQueries({ queryKey: ["pasear-logs", hostId] }); void state.refetch(); onNavigate();
   }
   function pager(position: string) {
-    return <View accessibilityLabel={`로그 페이지 ${position}`} style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-      <Action colors={colors} label="이전 페이지" disabled={pending || rows.isFetching || cursors.length === 1} onPress={() => navigate(cursors.slice(0, -1))} />
-      <Text accessibilityLiveRegion="polite" style={muted}>{cursors.length}페이지 · {entries.length}건</Text>
-      <Action colors={colors} label="다음 페이지" disabled={pending || rows.isFetching || !rows.data?.nextCursor || rows.isError} onPress={() => { if (rows.data?.nextCursor) navigate([...cursors, rows.data.nextCursor]); }} />
+    return <View accessibilityLabel={`Log pagination ${position}`} style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+      <Action colors={colors} label="Previous page" disabled={pending || rows.isFetching || cursors.length === 1} onPress={() => navigate(cursors.slice(0, -1))} />
+      <Text accessibilityLiveRegion="polite" style={muted}>Page {cursors.length} · {entries.length} records</Text>
+      <Action colors={colors} label="Next page" disabled={pending || rows.isFetching || !rows.data?.nextCursor || rows.isError} onPress={() => { if (rows.data?.nextCursor) navigate([...cursors, rows.data.nextCursor]); }} />
     </View>;
   }
   function input(label: string, value: string, set: (v: string) => void) {
@@ -94,11 +94,11 @@ export function Logs({ colors, hostId, active, onNavigate }: { colors: Colors; h
   }
   return <View nativeID="pasear-logs-panel" style={{ display: active ? "flex" : "none", gap: 16 }}>
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-      <Text accessibilityRole="header" style={{ ...text, fontWeight: "600" }}>통신 로그</Text>
+      <Text accessibilityRole="header" style={{ ...text, fontWeight: "600" }}>Traffic logs</Text>
     </View>
-    <Text accessibilityLiveRegion="polite" style={muted}>{state.data ? `${state.data.enabled ? "수집 중" : "수집 안 함"} · ${size(state.data.storedBytes)} · 최근 ${state.data.retentionDays}일, 최대 ${size(state.data.maxBytes)}` : state.isError ? "기록 상태를 확인하지 못했습니다." : "기록 상태를 불러오는 중…"}</Text>
-    <View accessibilityRole="radiogroup" accessibilityLabel="로그 수집" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-      {([[true, "수집함"], [false, "수집 안 함"]] as const).map(([enabled, label]) => {
+    <Text accessibilityLiveRegion="polite" style={muted}>{state.data ? `${state.data.enabled ? "Collecting" : "Collection off"} · ${size(state.data.storedBytes)} · ${state.data.retentionDays} days, up to ${size(state.data.maxBytes)}` : state.isError ? "Could not load logging status." : "Loading logging status…"}</Text>
+    <View accessibilityRole="radiogroup" accessibilityLabel="Log collection" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      {([[true, "Collection on"], [false, "Collection off"]] as const).map(([enabled, label]) => {
         const checked = state.data?.enabled === enabled;
         return <Pressable key={label} accessibilityRole="radio" accessibilityLabel={label} aria-checked={checked}
           accessibilityState={{ checked, disabled: pending || !state.data || state.isError }} disabled={pending || !state.data || state.isError}
@@ -110,37 +110,37 @@ export function Logs({ colors, hostId, active, onNavigate }: { colors: Colors; h
         </Pressable>;
       })}
     </View>
-    {state.data?.enabled === false ? <Text style={muted}>새 요청·응답과 호출 이력을 수집하지 않습니다. 기존 로그는 유지되며 전체 로그 삭제로 지울 수 있습니다.</Text> : null}
+    {state.data?.enabled === false ? <Text style={muted}>New traffic and tool activity are not collected. Existing logs remain until you delete them.</Text> : null}
     {state.data?.error ? <Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>{state.data.error}</Text> : null}
-    {state.data?.dropped ? <Text style={{ ...muted, color: colors.statusDanger }}>이번 실행에서 {state.data.dropped}건을 저장하지 못했습니다. 저장 오류 또는 기록량 제한을 확인하세요.</Text> : null}
+    {state.data?.dropped ? <Text style={{ ...muted, color: colors.statusDanger }}>{state.data.dropped} records could not be saved during this run. Check storage errors or recording limits.</Text> : null}
     <View style={{ gap: 16 }}>
-      <Text style={muted}>MCP 요청·응답을 이 호스트에 저장합니다. 인증 헤더·OAuth 본문은 기록하지 않으며, 알려진 인증 값과 비밀키 필드를 가립니다. 본문에는 작업 내용이 포함됩니다. 응답이 1MB를 넘으면 본문 생략 표시를 남깁니다.</Text>
+      <Text style={muted}>MCP requests and responses are stored on this host. Auth headers and OAuth bodies are excluded; known credentials are redacted. Bodies may contain task content. Response bodies over 1 MiB are marked as omitted.</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        <Action colors={colors} label="로그 새로고침" disabled={pending || rows.isFetching} onPress={refresh} />
+        <Action colors={colors} label="Refresh logs" disabled={pending || rows.isFetching} onPress={refresh} />
       </View>
-      <View style={{ gap: 8 }}>{input("연결 이름 또는 ID로 필터", connection, setConnection)}{input("도구 이름으로 필터", tool, setTool)}</View>
-      {rows.isPending ? <Text style={muted}>로그를 불러오는 중…</Text> : rows.isError ? <View style={{ gap: 8 }}><Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>로그를 불러오지 못했습니다. 로그 새로고침으로 다시 시도하세요.</Text></View>
-        : !entries.length ? <Text style={muted}>{filters.connection || filters.tool ? "조건에 맞는 로그가 없습니다." : "저장된 MCP 통신 기록이 없습니다."}</Text> : null}
-      {pager("상단")}
+      <View style={{ gap: 8 }}>{input("Filter by connection name or ID", connection, setConnection)}{input("Filter by tool name", tool, setTool)}</View>
+      {rows.isPending ? <Text style={muted}>Loading logs…</Text> : rows.isError ? <View style={{ gap: 8 }}><Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>Could not load logs. Select Refresh logs to try again.</Text></View>
+        : !entries.length ? <Text style={muted}>{filters.connection || filters.tool ? "No matching logs." : "No MCP traffic recorded."}</Text> : null}
+      {pager("Top")}
       {entries.map((row) => <View key={row.id} style={{ gap: 8, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Text style={{ ...text, fontWeight: "600" }}>{row.tool || row.method || `${row.httpMethod} ${row.path}`} · {outcomes[row.outcome]}</Text>
         <Text style={muted}>{new Date(row.at).toLocaleString()} · {row.durationMs}ms</Text>
-        <Text style={muted}>{row.clientName || (row.connectionId ? "연결 이름 없음" : "미인증 요청")}</Text>
-        <View style={{ alignItems: "flex-start" }}><Action colors={colors} quiet label={selected === row.id ? "상세 닫기" : `상세 보기 ${row.id.slice(0, 8)}`} expanded={selected === row.id} onPress={() => setSelected(selected === row.id ? null : row.id)} /></View>
+        <Text style={muted}>{row.clientName || (row.connectionId ? "Unnamed connection" : "Unauthenticated request")}</Text>
+        <View style={{ alignItems: "flex-start" }}><Action colors={colors} quiet label={selected === row.id ? "Hide details" : `View details ${row.id.slice(0, 8)}`} expanded={selected === row.id} onPress={() => setSelected(selected === row.id ? null : row.id)} /></View>
         {selected === row.id ? <Detail key={row.id} id={row.id} hostId={hostId} colors={colors} /> : null}
       </View>)}
-      {entries.length > 5 ? pager("하단") : null}
+      {entries.length > 5 ? pager("Bottom") : null}
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        {Platform.OS === "web" ? <Action colors={colors} label={pending && action.variables === "export" ? "내려받는 중…" : "조회한 로그 내려받기"} disabled={pending || !entries.length} onPress={() => action.mutate("export")} /> : null}
-        <Action colors={colors} label="전체 로그 삭제" disabled={pending || !state.data?.storedBytes} onPress={() => setConfirmDelete(true)} />
+        {Platform.OS === "web" ? <Action colors={colors} label={pending && action.variables === "export" ? "Downloading…" : "Download matching logs"} disabled={pending || !entries.length} onPress={() => action.mutate("export")} /> : null}
+        <Action colors={colors} label="Delete all logs" disabled={pending || !state.data?.storedBytes} onPress={() => setConfirmDelete(true)} />
       </View>
-      {Platform.OS !== "web" ? <Text style={muted}>각 기록은 펼쳐서 공유할 수 있습니다. 전체 파일 내려받기는 웹에서 지원합니다.</Text> : null}
-      {confirmDelete ? <View style={{ gap: 8 }}><Text style={text}>이 호스트에 저장된 모든 로그를 삭제합니다. 현재 필터와 관계없이 삭제하며 복구할 수 없습니다.</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        <Action colors={colors} label="모든 로그 삭제 확인" disabled={pending} onPress={() => action.mutate("clear")} /><Action colors={colors} label="삭제 취소" disabled={pending} onPress={() => setConfirmDelete(false)} />
+      {Platform.OS !== "web" ? <Text style={muted}>Expand a record to share it. Full log downloads are available on the web.</Text> : null}
+      {confirmDelete ? <View style={{ gap: 8 }}><Text style={text}>Delete all logs stored on this host, including records outside the current filter. This cannot be undone.</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <Action colors={colors} label="Confirm delete all logs" disabled={pending} onPress={() => action.mutate("clear")} /><Action colors={colors} label="Cancel deletion" disabled={pending} onPress={() => setConfirmDelete(false)} />
       </View></View> : null}
     </View>
-    {state.isError ? <Action colors={colors} label="로그 상태 다시 불러오기" onPress={() => { void state.refetch(); }} /> : null}
-    {action.error ? <Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>{action.error instanceof Error ? action.error.message : "처리하지 못했습니다. 다시 시도하세요."}</Text> : null}
+    {state.isError ? <Action colors={colors} label="Reload logging status" onPress={() => { void state.refetch(); }} /> : null}
+    {action.error ? <Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>{action.error instanceof Error ? action.error.message : "Could not complete the action. Try again."}</Text> : null}
     {notice ? <Text accessibilityLiveRegion="polite" style={muted}>{notice}</Text> : null}
   </View>;
 }

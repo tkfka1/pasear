@@ -42,21 +42,21 @@ function Page({ theme, layout, host }: PluginScreenProps) {
     mutationFn: async (kind: "start" | "stop" | "save" | "key") => {
       setNotice("");
       if (kind === "stop") return stopRpc({});
-      if (!draft || settings.status !== "ready") throw new Error("설정을 불러온 뒤 다시 시도하세요.");
+      if (!draft || settings.status !== "ready") throw new Error("Wait for settings to load, then try again.");
       if (kind === "key") {
         change({ connectionKey: (await keyRpc({})).connectionKey });
-        setNotice("저장 후 서버를 켜면 기존 연결이 해제됩니다."); return;
+        setNotice("Saving and starting the server will disconnect existing chats."); return;
       }
       const parsed = configSchema.safeParse({ ...draft, port: Number(draft.port), publicUrl: draft.publicUrl.trim() });
-      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "설정을 확인하세요.");
+      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Check your settings.");
       if (kind === "start") {
-        if (!parsed.data.publicUrl) { setEditing(true); throw new Error("공개 HTTPS 주소를 입력하세요."); }
+        if (!parsed.data.publicUrl) { setEditing(true); throw new Error("Enter the public HTTPS URL."); }
         if (!parsed.data.connectionKey) parsed.data.connectionKey = (await keyRpc({})).connectionKey;
       }
-      if (!await settings.save(parsed.data, draft.revision)) throw new Error("저장하지 못했습니다. 변경을 취소하고 다시 시도하세요.");
+      if (!await settings.save(parsed.data, draft.revision)) throw new Error("Could not save. Cancel your changes and try again.");
       setDirty(false); setEditing(false);
       if (kind === "start") return startRpc({});
-      setNotice("저장했습니다.");
+      setNotice("Saved.");
     },
     onSuccess: (result) => { if (result) cache.setQueryData(queryKey, result); },
     onSettled: () => { void cache.invalidateQueries({ queryKey }); },
@@ -69,12 +69,12 @@ function Page({ theme, layout, host }: PluginScreenProps) {
   function input(name: string, value: string, onChangeText: (value: string) => void, placeholder = "") {
     return <TextInput accessibilityLabel={name} value={value} onChangeText={onChangeText} editable={!running && !pending}
       placeholder={placeholder} placeholderTextColor={colors.foregroundMuted} autoCapitalize="none" autoCorrect={false}
-      onFocus={() => setFocused(name)} onBlur={() => setFocused("")} keyboardType={name === "수신 포트" ? "number-pad" : "default"}
+      onFocus={() => setFocused(name)} onBlur={() => setFocused("")} keyboardType={name === "Port" ? "number-pad" : "default"}
       style={{ ...text, minHeight: 48, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 8, borderWidth: 1,
         borderColor: focused === name ? colors.accent : colors.border, backgroundColor: colors.surface0, opacity: running ? 0.65 : 1 }} />;
   }
   if (settings.status !== "ready" || !draft) return <View style={{ flex: 1, padding: 24, backgroundColor: colors.surface0 }}>
-    <Text accessibilityLiveRegion="polite" style={text}>{settings.status === "loading" ? "불러오는 중…" : "호스트 연결을 확인하세요."}</Text>
+    <Text accessibilityLiveRegion="polite" style={text}>{settings.status === "loading" ? "Loading…" : "Check the host connection."}</Text>
   </View>;
   const saved = settings.values;
   const revision = settings.revision;
@@ -90,43 +90,43 @@ function Page({ theme, layout, host }: PluginScreenProps) {
     <View nativeID="pasear-main" style={{ width: "100%", maxWidth: 600, alignSelf: "center", gap: 32, paddingBottom: 32 }}>
       <View style={{ gap: 6 }}>
         <Text accessibilityRole="header" style={{ color: colors.foreground, fontSize: 26, lineHeight: 34, fontWeight: "600", letterSpacing: -0.6 }}>pasear</Text>
-        <Text style={muted}>웹 채팅에서 Paseo 제어</Text>
+        <Text style={muted}>Control Paseo from web chat</Text>
       </View>
-      <View accessibilityRole="tablist" accessibilityLabel="pasear 메뉴" style={{ flexDirection: "row", borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        {([["connection", "연결"], ["logs", "로그"]] as const).map(([id, title]) => <Pressable key={id} accessibilityRole="tab" accessibilityLabel={title}
+      <View accessibilityRole="tablist" accessibilityLabel="pasear navigation" style={{ flexDirection: "row", borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        {([["connection", "Connections"], ["logs", "Logs"]] as const).map(([id, title]) => <Pressable key={id} accessibilityRole="tab" accessibilityLabel={title}
           accessibilityState={{ selected: tab === id }} aria-selected={tab === id} onPress={() => selectTab(id)}
           onFocus={() => setFocused(`tab:${id}`)} onBlur={() => setFocused("")}
           style={({ pressed }) => ({ minHeight: 44, paddingHorizontal: 20, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 8,
             borderBottomWidth: 2, borderBottomColor: tab === id || focused === `tab:${id}` ? colors.accent : "transparent", backgroundColor: pressed ? colors.surface1 : "transparent" })}>
           <Text style={{ ...text, color: tab === id ? colors.foreground : colors.foregroundMuted, fontWeight: tab === id ? "600" : "400" }}>{title}</Text>
-          {id === "connection" && pendingConnections > 0 ? <Text accessibilityLabel={`승인 대기 ${pendingConnections}건`} style={{ ...muted, color: colors.accent }}>{pendingConnections}</Text> : null}
+          {id === "connection" && pendingConnections > 0 ? <Text accessibilityLabel={`${pendingConnections} pending approvals`} style={{ ...muted, color: colors.accent }}>{pendingConnections}</Text> : null}
         </Pressable>)}
       </View>
-      {tab === "logs" && pendingConnections > 0 ? <Action colors={colors} label={`연결 승인 요청 ${pendingConnections}건 보기`} onPress={() => selectTab("connection")} /> : null}
+      {tab === "logs" && pendingConnections > 0 ? <Action colors={colors} label={`View connection requests (${pendingConnections})`} onPress={() => selectTab("connection")} /> : null}
       <View nativeID="pasear-connection-panel" style={{ display: tab === "connection" ? "flex" : "none", gap: 32 }}>
       <View style={{ gap: 24 }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
           <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <View accessible={false} style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: status.isError ? colors.statusDanger : running ? colors.statusSuccess : colors.foregroundMuted }} />
-              <Text accessibilityLiveRegion="polite" style={label}>{status.isError ? "상태 확인 필요" : !status.data ? "확인 중…" : running ? "실행 중" : "중지됨"}</Text>
+              <Text accessibilityLiveRegion="polite" style={label}>{status.isError ? "Check status" : !status.data ? "Checking…" : running ? "Running" : "Stopped"}</Text>
             </View>
             <Text style={muted}>{host.label} · {running ? status.data?.port : draft.port}</Text>
           </View>
-          {!firstRun ? <Action colors={colors} primary={!running} label={pending && action.variables === "start" ? "켜는 중…" : pending && action.variables === "stop" ? "끄는 중…" : running ? "서버 끄기" : "서버 켜기"}
+          {!firstRun ? <Action colors={colors} primary={!running} label={pending && action.variables === "start" ? "Starting…" : pending && action.variables === "stop" ? "Stopping…" : running ? "Stop server" : "Start server"}
             disabled={pending || !ready} onPress={() => action.mutate(running ? "stop" : "start")} /> : null}
         </View>
-        {status.isError ? <Action colors={colors} label="다시 확인" onPress={() => { void status.refetch(); }} /> : null}
+        {status.isError ? <Action colors={colors} label="Check again" onPress={() => { void status.refetch(); }} /> : null}
         {showSettings ? <View nativeID="pasear-settings" style={{ gap: 12 }}>
-          <Text style={label}>공개 MCP 주소</Text>
-          {input("공개 MCP 주소", draft.publicUrl, (publicUrl) => change({ publicUrl }), "https://mcp.example.com")}
-          <View style={{ alignItems: "flex-start" }}><Action colors={colors} quiet label={advanced ? "고급 설정 접기" : "고급 설정"} expanded={advanced} onPress={() => setAdvanced(!advanced)} /></View>
+          <Text style={label}>Public MCP URL</Text>
+          {input("Public MCP URL", draft.publicUrl, (publicUrl) => change({ publicUrl }), "https://mcp.example.com")}
+          <View style={{ alignItems: "flex-start" }}><Action colors={colors} quiet label={advanced ? "Hide advanced settings" : "Advanced settings"} expanded={advanced} onPress={() => setAdvanced(!advanced)} /></View>
           {advanced ? <View style={{ gap: 16, paddingVertical: 8 }}>
-            <View style={{ gap: 8 }}><Text style={label}>수신 포트</Text>{input("수신 포트", draft.port, (port) => change({ port }))}</View>
+            <View style={{ gap: 8 }}><Text style={label}>Port</Text>{input("Port", draft.port, (port) => change({ port }))}</View>
             <View style={{ gap: 8 }}>
-              <Text style={label}>접속 범위</Text>
-              <View accessibilityRole="radiogroup" accessibilityLabel="접속 범위" style={{ gap: 8 }}>
-                {([["127.0.0.1", "이 호스트만", "127.0.0.1"], ["0.0.0.0", "네트워크", "0.0.0.0"]] as const).map(([value, title, address]) => <Pressable key={value}
+              <Text style={label}>Network access</Text>
+              <View accessibilityRole="radiogroup" accessibilityLabel="Network access" style={{ gap: 8 }}>
+                {([["127.0.0.1", "This host only", "127.0.0.1"], ["0.0.0.0", "Network", "0.0.0.0"]] as const).map(([value, title, address]) => <Pressable key={value}
                   accessibilityRole="radio" accessibilityLabel={`${title} · ${address}`} aria-checked={draft.host === value} accessibilityState={{ checked: draft.host === value, disabled: running || pending }}
                   disabled={running || pending} onPress={() => change({ host: value })} style={({ pressed }) => ({ minHeight: 48, paddingHorizontal: 14, paddingVertical: 12,
                     flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderColor: draft.host === value ? colors.accent : colors.border,
@@ -137,14 +137,14 @@ function Page({ theme, layout, host }: PluginScreenProps) {
               </View>
             </View>
             {saved.connectionKey ? <View style={{ gap: 4, alignItems: "flex-start" }}>
-              <Action colors={colors} label="비밀키 교체" disabled={running || pending} onPress={() => action.mutate("key")} />
-              <Text style={muted}>교체 후 저장하고 켜면 기존 연결이 해제됩니다.</Text>
+              <Action colors={colors} label="Replace key" disabled={running || pending} onPress={() => action.mutate("key")} />
+              <Text style={muted}>Saving and starting with a new key will disconnect existing chats.</Text>
             </View> : null}
           </View> : null}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            <Action colors={colors} primary label={pending ? "처리 중…" : firstRun ? "저장하고 켜기" : "저장"}
+            <Action colors={colors} primary label={pending ? "Working…" : firstRun ? "Save and start" : "Save"}
               disabled={pending || running || !draft.publicUrl.trim() || (firstRun ? !ready : !dirty)} onPress={() => action.mutate(firstRun ? "start" : "save")} />
-            {!firstRun || dirty ? <Action colors={colors} quiet label="취소" disabled={pending} onPress={cancelEdit} /> : null}
+            {!firstRun || dirty ? <Action colors={colors} quiet label="Cancel" disabled={pending} onPress={cancelEdit} /> : null}
           </View>
         </View> : <ConnectionDetails colors={colors} values={saved} running={running} onEdit={() => { setEditing(true); action.reset(); setNotice(""); }} onNotice={setNotice} />}
         {error ? <Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>{error}</Text> : null}

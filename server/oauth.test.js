@@ -172,7 +172,7 @@ test("authorization waits for explicit Paseo consent and escapes untrusted clien
   assert.equal(h.store.codes.size, 0);
   assert.equal((await h.request("/oauth/approve", { method: "POST" })).status, 404);
   const pending = h.store.snapshot().pending[0];
-  assert.throws(() => h.store.decide(pending.id, true, []), /워크스페이스/);
+  assert.throws(() => h.store.decide(pending.id, true, []), /workspaces/);
   h.store.decide(pending.id, false, []);
   const denied = new URL((await h.request(start.flowUrl)).headers.get("location"));
   assert.equal(denied.searchParams.get("error"), "access_denied");
@@ -210,7 +210,7 @@ test("owner consent cannot approve a manually injected partial-scope request", a
   await h.begin(client);
   const pending = [...h.store.pending.values()][0];
   pending.params.scopes = ["paseo:read"];
-  assert.throws(() => h.store.decide(pending.id, true, null), /작업 제어/);
+  assert.throws(() => h.store.decide(pending.id, true, null), /Task control/);
   assert.equal(h.store.snapshot().connections.length, 0);
   assert.equal(pending.decision, "pending");
 });
@@ -581,9 +581,9 @@ test("access edits persist without changing tokens and reject stale, invalid and
   const tokens = provider.issue("example");
   const before = JSON.parse(readFileSync(store.file, "utf8"));
   store.updateAccess("example", ["w", "w"], ["a", "a"], 0);
-  assert.throws(() => store.updateAccess("example", null, null, 0), /다른 곳/);
-  assert.throws(() => store.updateAccess("example", [], null, 1), /대상/);
-  assert.throws(() => store.updateAccess("example", null, [], 1), /대상/);
+  assert.throws(() => store.updateAccess("example", null, null, 0), /changed elsewhere/);
+  assert.throws(() => store.updateAccess("example", [], null, 1), /target/);
+  assert.throws(() => store.updateAccess("example", null, [], 1), /target/);
   const restored = new OAuthStore(store.file), next = new PaseoOAuthProvider(restored, publicUrl, connectionKey);
   const info = await next.verifyAccessToken(tokens.access_token);
   assert.deepEqual(info.extra.workspaceIds, ["w"]); assert.deepEqual(info.extra.agentIds, ["a"]); assert.equal(info.extra.accessRevision, 1);
@@ -591,7 +591,7 @@ test("access edits persist without changing tokens and reject stale, invalid and
   assert.deepEqual(after.access, before.access); assert.deepEqual(after.refresh, before.refresh);
   assert.equal(after.grants.example.expiresAt, before.grants.example.expiresAt);
   restored.revoke("example");
-  assert.throws(() => restored.updateAccess("example", null, null, 1), /해제/);
+  assert.throws(() => restored.updateAccess("example", null, null, 1), /revoked/);
   await assert.rejects(next.verifyAccessToken(tokens.access_token));
 });
 
@@ -664,7 +664,7 @@ test("hierarchical rules persist without altering old grants and explicit worksp
   for (const id of ["old", "new"]) store.data.grants[id] = { id, clientId: id, controlPermissionVersion: 1, keyHash: provider.keyHash, scopes: SCOPES, workspaceIds: ["w"], agentIds: ["a"], resource: publicUrl, createdAt: 1, expiresAt: Math.floor(Date.now() / 1000) + 1000, revoked: false };
   const token = provider.issue("new").access_token; store.persist(); const original = JSON.parse(readFileSync(store.file, "utf8"));
   store.updateAccess("new", null, null, 0, [{ kind: "workspace", id: "w" }]);
-  assert.throws(() => store.updateAccess("new", null, null, 1, []), /프로젝트/);
+  assert.throws(() => store.updateAccess("new", null, null, 1, []), /projects/);
   const restored = new OAuthStore(store.file), next = new PaseoOAuthProvider(restored, publicUrl, connectionKey);
   assert.deepEqual(restored.data.grants.old, original.grants.old);
   assert.deepEqual(restored.data.access, original.access); assert.deepEqual(restored.data.refresh, original.refresh);

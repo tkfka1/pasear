@@ -13,7 +13,7 @@ Requires Paseo daemon and app 0.11.2+, plugins enabled, npm, and the local `pase
 Environment checked **2026-11-05**: Paseo CLI/daemon **0.15.0**, Node.js **24.21.0**, npm **11.19.0**. [Language, library versions and verification details](docs/reference.md#versions).
 
 ```bash
-paseo plugin add git:tkfka1/pasear --ref v0.12.2
+paseo plugin add git:tkfka1/pasear --ref v0.12.3
 ```
 
 Open **pasear** in the Paseo sidebar, then choose one connection method below.

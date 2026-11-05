@@ -32,13 +32,13 @@ export class McpServerManager {
   start(config: McpConfig, paseo: PluginHandlerContext["paseo"]): Promise<McpStatus> {
     return this.exclusive(async () => {
       const parsed = configSchema.safeParse(config);
-      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "MCP 설정을 확인하세요.");
+      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Check your MCP settings.");
       config = parsed.data;
-      if (!config.publicUrl) throw new Error("공개 HTTPS MCP 주소를 입력하세요.");
-      if (!config.connectionKey) throw new Error("먼저 연결 비밀키를 생성하고 설정을 저장하세요.");
+      if (!config.publicUrl) throw new Error("Enter the public HTTPS MCP URL.");
+      if (!config.connectionKey) throw new Error("Generate a connection key and save your settings first.");
       if (this.listener?.listening) {
         if (this.active && this.sameListener(this.active, config)) return this.status();
-        throw new Error("실행 중인 서버를 중지한 뒤 수신 설정을 변경하세요.");
+        throw new Error("Stop the server before changing listener settings.");
       }
       await this.trafficLog?.ready;
       const app = createApp({ ...config, trafficLog: this.trafficLog, oauthStore: this.oauth, connection: { getApi: async () => paseo }, cancelAgent: stopAgent, importAgent: this.importAgent });
@@ -53,8 +53,8 @@ export class McpServerManager {
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code;
         throw new Error(code === "EADDRINUSE"
-          ? `${config.port} 포트를 다른 프로세스가 사용 중입니다. 다른 포트를 선택하세요.`
-          : "MCP 서버를 시작하지 못했습니다. 바인드 주소와 포트를 확인하세요.");
+          ? `Port ${config.port} is already in use. Choose another port.`
+          : "Could not start the MCP server. Check the bind address and port.");
       }
       this.listener = listener;
       this.active = { ...config };

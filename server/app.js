@@ -18,7 +18,7 @@ export function createApp({ connectionKey, connection, oauthStore, publicUrl, ca
     finally { if (imports.get(key) === next) imports.delete(key); }
   }
   app.disable("x-powered-by");
-  if (!publicUrl || !connectionKey || !oauthStore) throw new Error("OAuth 공개 주소와 연결 비밀키가 필요합니다.");
+  if (!publicUrl || !connectionKey || !oauthStore) throw new Error("The public OAuth URL and connection key are required.");
   const resourceUrl = new URL(publicUrl);
   const mcpPaths = ["/", "/mcp"];
   const oauth = new PaseoOAuthProvider(oauthStore, publicUrl, connectionKey);

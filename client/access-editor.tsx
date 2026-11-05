@@ -18,13 +18,13 @@ export function AccessEditor({ connection, colors, hostId, onSaved, onCancel }: 
   const [dirty, setDirty] = useState(false);
   const save = useMutation({ mutationFn: () => saveRpc({ id: original.id, accessRevision: original.accessRevision, workspaceIds: null, agentIds: null, accessRules: rules ?? [] }), onSuccess: onSaved });
   return <View style={{ gap: 12, paddingVertical: 12 }}>
-    <Text accessibilityRole="header" style={{ color: colors.foreground, fontSize: 14, fontWeight: "600" }}>{connection.clientName} 접근 범위</Text>
+    <Text accessibilityRole="header" style={{ color: colors.foreground, fontSize: 14, fontWeight: "600" }}>Access · {connection.clientName}</Text>
     <AccessSelector rules={rules} onChange={(value) => { setRules(value); setDirty(true); }} colors={colors} hostId={hostId} disabled={save.isPending} legacy={original} />
-    <Text style={{ color: colors.foregroundMuted, fontSize: 13, lineHeight: 21 }}>저장하면 재연결 없이 적용되며 실행 중인 작업은 중단하지 않습니다.</Text>
+    <Text style={{ color: colors.foregroundMuted, fontSize: 13, lineHeight: 21 }}>Changes apply immediately without reconnecting or stopping running tasks.</Text>
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-      <Action colors={colors} primary label={save.isPending ? "저장 중…" : "접근 범위 저장"} disabled={save.isPending || !dirty || !rules?.length || rules.length > 100} onPress={() => save.mutate()} />
-      <Action colors={colors} label="편집 취소" disabled={save.isPending} onPress={onCancel} />
+      <Action colors={colors} primary label={save.isPending ? "Saving…" : "Save access"} disabled={save.isPending || !dirty || !rules?.length || rules.length > 100} onPress={() => save.mutate()} />
+      <Action colors={colors} label="Cancel editing" disabled={save.isPending} onPress={onCancel} />
     </View>
-    {save.error ? <Text accessibilityRole="alert" style={{ color: colors.statusDanger, fontSize: 14, lineHeight: 22 }}>{save.error instanceof Error ? save.error.message : "접근 범위를 저장하지 못했습니다."}</Text> : null}
+    {save.error ? <Text accessibilityRole="alert" style={{ color: colors.statusDanger, fontSize: 14, lineHeight: 22 }}>{save.error instanceof Error ? save.error.message : "Could not save access."}</Text> : null}
   </View>;
 }

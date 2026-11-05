@@ -2,17 +2,17 @@ import { defineRpc, defineSettings } from "@getpaseo/plugin";
 import { z } from "zod";
 export type { RpcInput } from "@getpaseo/plugin";
 
-const publicMcpUrlSchema = z.string().url("올바른 HTTPS MCP 주소를 입력하세요.").refine((value) => {
+const publicMcpUrlSchema = z.string().url("Enter a valid HTTPS MCP URL.").refine((value) => {
   try {
     const url = new URL(value);
     return url.protocol === "https:" && ["/", "/mcp"].includes(url.pathname) && !url.search && !url.hash && !url.username && !url.password;
   } catch { return false; }
-}, "공개 주소는 https://도메인 형식이어야 합니다. 기존 /mcp 주소도 사용할 수 있습니다. 쿼리나 사용자 정보는 넣지 마세요.");
+}, "Use an HTTPS domain URL, optionally ending in /mcp, without query parameters or user credentials.");
 
 export const configSchema = z.object({
   host: z.enum(["127.0.0.1", "0.0.0.0"]).default("0.0.0.0"),
-  port: z.number().int("포트는 정수여야 합니다.").min(1024, "1024 이상의 포트를 입력하세요.").max(65535, "65535 이하의 포트를 입력하세요.").default(8787),
-  connectionKey: z.string().regex(/^[a-f0-9]{64}$|^$/, "연결 비밀키 생성 버튼으로 키를 만드세요.").default(""),
+  port: z.number().int("Port must be a whole number.").min(1024, "Enter a port of 1024 or higher.").max(65535, "Enter a port of 65535 or lower.").default(8787),
+  connectionKey: z.string().regex(/^[a-f0-9]{64}$|^$/, "Generate a connection key using the key button.").default(""),
   publicUrl: z.string().trim().default(""),
 }).superRefine((config, ctx) => {
   if (config.publicUrl) {
@@ -24,7 +24,7 @@ export type McpConfig = z.infer<typeof configSchema>;
 export const preferences = defineSettings({
   id: "listener", scope: "host", version: 3, schema: configSchema,
   migrate(values, fromVersion) {
-    if (![1, 2].includes(fromVersion) || !values || typeof values !== "object" || Array.isArray(values)) throw new Error("저장된 MCP 설정을 변환하지 못했습니다.");
+    if (![1, 2].includes(fromVersion) || !values || typeof values !== "object" || Array.isArray(values)) throw new Error("Could not migrate saved MCP settings.");
     const previous = values as Record<string, unknown>;
     return { host: previous.host, port: previous.port, publicUrl: previous.publicUrl, connectionKey: previous.token ?? "" };
   },
@@ -60,7 +60,7 @@ export const decideConnection = defineRpc({ name: "mcp.consent", input: z.object
   accessRules: z.array(accessRuleSchema).min(1).max(100).optional(),
 }).superRefine((input, ctx) => {
   if (input.allow && input.accessRules === undefined && (input.workspaceIds === undefined || input.workspaceIds?.length === 0)) {
-    ctx.addIssue({ code: "custom", message: "허용할 항목을 하나 이상 선택하세요." });
+    ctx.addIssue({ code: "custom", message: "Select at least one allowed target." });
   }
 }), output: connectionsSchema });
 export const revokeConnection = defineRpc({ name: "mcp.revoke", input: z.object({ id: z.string() }), output: connectionsSchema });

@@ -19,15 +19,15 @@ function Approval({ request, colors, hostLabel, hostId, pending, onDecide }: {
   const muted = { color: colors.foregroundMuted, fontSize: 13, lineHeight: 21 };
   return <View style={{ gap: 12, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
     <Text style={{ ...text, fontWeight: "600" }}>{request.clientName}</Text>
-    <Text selectable style={text}>확인 코드 {request.code}</Text>
-    <Text selectable style={muted}>돌아갈 주소: {request.redirectUri}</Text>
-    <Text style={muted}>인증 창의 코드·주소를 확인하세요. 앱 이름만으로 신뢰하지 마세요.</Text>
-    <Text style={text}>{hostLabel} · 선택한 범위의 작업 제어를 허용합니다.</Text>
-    <Text style={{ ...text, fontWeight: "600" }}>접근 범위</Text>
+    <Text selectable style={text}>Verification code {request.code}</Text>
+    <Text selectable style={muted}>Callback URL: {request.redirectUri}</Text>
+    <Text style={muted}>Check the code and callback URL in the sign-in window. The app name alone does not verify its identity.</Text>
+    <Text style={text}>{hostLabel} · Allow task control within the selected targets.</Text>
+    <Text style={{ ...text, fontWeight: "600" }}>Access</Text>
     <AccessSelector rules={rules} onChange={setRules} colors={colors} hostId={hostId} disabled={pending} />
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-      <Action colors={colors} primary label="연결 승인" disabled={pending || !hasControl(request.scopes) || !rules.length || rules.length > 100} onPress={() => onDecide({ id: request.id, allow: true, accessRules: rules })} />
-      <Action colors={colors} label="거절" disabled={pending} onPress={() => onDecide({ id: request.id, allow: false, workspaceIds: [] })} />
+      <Action colors={colors} primary label="Approve connection" disabled={pending || !hasControl(request.scopes) || !rules.length || rules.length > 100} onPress={() => onDecide({ id: request.id, allow: true, accessRules: rules })} />
+      <Action colors={colors} label="Deny" disabled={pending} onPress={() => onDecide({ id: request.id, allow: false, workspaceIds: [] })} />
     </View>
   </View>;
 }
@@ -50,33 +50,33 @@ export function Connections({ colors, hostId, hostLabel, expanded, onPendingChan
   if (!expanded && !requests.length && !action.error) return null;
   return <View style={{ gap: 12 }}>
     {requests.length ? <View>
-      <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={{ ...text, fontWeight: "600", fontSize: 17 }}>연결 승인 요청 · {requests.length}</Text>
+      <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={{ ...text, fontWeight: "600", fontSize: 17 }}>Connection requests · {requests.length}</Text>
       {requests.map((request) => <Approval key={request.id} request={request} colors={colors} hostLabel={hostLabel} hostId={hostId} pending={action.isPending}
         onDecide={(input) => action.mutate({ kind: "decide", input })} />)}
     </View> : null}
-    {action.error ? <Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>{action.error instanceof Error ? action.error.message : "요청을 처리하지 못했습니다."}</Text> : null}
+    {action.error ? <Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>{action.error instanceof Error ? action.error.message : "Could not process the request."}</Text> : null}
     {expanded ? <View style={{ gap: 12 }}>
-      <Text accessibilityRole="header" style={{ ...text, fontSize: 15, fontWeight: "600" }}>연결{state.data ? ` · ${state.data.connections.length}` : ""}</Text>
-      {state.isError ? <Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>연결 목록을 불러오지 못했습니다. 다시 조회하세요.</Text> : !state.data ? <Text style={muted}>연결을 불러오는 중…</Text> : null}
-      {state.data && !state.data.connections.length ? <Text style={muted}>연결된 채팅이 없습니다.</Text> : null}
+      <Text accessibilityRole="header" style={{ ...text, fontSize: 15, fontWeight: "600" }}>Connections{state.data ? ` · ${state.data.connections.length}` : ""}</Text>
+      {state.isError ? <Text accessibilityRole="alert" style={{ ...text, color: colors.statusDanger }}>Could not load connections. Refresh the list.</Text> : !state.data ? <Text style={muted}>Loading connections…</Text> : null}
+      {state.data && !state.data.connections.length ? <Text style={muted}>No chats connected.</Text> : null}
       {state.data?.connections.map((connection) => <View key={connection.id} style={{ gap: 8, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={{ ...text, fontWeight: "600" }}>{connection.clientName}</Text>
-            {connection.accessRules ? <Text style={muted}>{connection.accessRules.some((r) => r.kind === "all") ? "모든 프로젝트와 에이전트"
-              : ["project", "workspace", "agent"].map((kind, index) => { const count = connection.accessRules!.filter((r) => r.kind === kind).length; return count ? `${count}개 ${["프로젝트", "워크스페이스", "에이전트"][index]}` : null; }).filter(Boolean).join(" · ")}</Text>
-              : <><Text style={muted}>{connection.workspaceIds === null ? "전체 워크스페이스" : `${connection.workspaceIds.length}개 워크스페이스`}</Text>
-                <Text style={muted}>{connection.agentIds === null ? "모든 에이전트" : `${connection.agentIds.length}개 에이전트`}</Text></>}
+            {connection.accessRules ? <Text style={muted}>{connection.accessRules.some((r) => r.kind === "all") ? "All projects and agents"
+              : ["project", "workspace", "agent"].map((kind) => { const count = connection.accessRules!.filter((r) => r.kind === kind).length; return count ? `${count} ${kind}${count === 1 ? "" : "s"}` : null; }).filter(Boolean).join(" · ")}</Text>
+              : <><Text style={muted}>{connection.workspaceIds === null ? "All workspaces" : `${connection.workspaceIds.length} workspace${connection.workspaceIds.length === 1 ? "" : "s"}`}</Text>
+                <Text style={muted}>{connection.agentIds === null ? "All agents" : `${connection.agentIds.length} agent${connection.agentIds.length === 1 ? "" : "s"}`}</Text></>}
           </View>
-          <Action colors={colors} label="연결 해제" disabled={action.isPending} onPress={() => action.mutate({ kind: "revoke", id: connection.id })} />
+          <Action colors={colors} label="Disconnect" disabled={action.isPending} onPress={() => action.mutate({ kind: "revoke", id: connection.id })} />
         </View>
         {editing === connection.id ? <AccessEditor key={connection.id} connection={connection} colors={colors} hostId={hostId}
-          onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); setNotice("접근 범위를 저장했습니다."); void state.refetch(); }} />
-          : <View style={{ alignItems: "flex-start" }}><Action colors={colors} label="접근 범위" disabled={action.isPending}
+          onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); setNotice("Access saved."); void state.refetch(); }} />
+          : <View style={{ alignItems: "flex-start" }}><Action colors={colors} label="Access" disabled={action.isPending}
             onPress={() => { setNotice(""); setEditing(connection.id); }} /></View>}
       </View>)}
     </View> : null}
     {notice && expanded ? <Text accessibilityLiveRegion="polite" style={muted}>{notice}</Text> : null}
-    {state.isError ? <View style={{ alignItems: "flex-start" }}><Action colors={colors} label="다시 불러오기" disabled={action.isPending} onPress={() => { void state.refetch(); }} /></View> : null}
+    {state.isError ? <View style={{ alignItems: "flex-start" }}><Action colors={colors} label="Reload" disabled={action.isPending} onPress={() => { void state.refetch(); }} /></View> : null}
   </View>;
 }

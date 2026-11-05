@@ -39,7 +39,7 @@ test("a port conflict is recoverable and leaves the other service alone", async 
   t.after(() => new Promise<void>((resolve) => occupied.close(() => resolve())));
   const manager = new McpServerManager();
   t.after(() => manager.stop());
-  await assert.rejects(manager.start(configSchema.parse({ port, connectionKey, publicUrl }), api), /사용 중/);
+  await assert.rejects(manager.start(configSchema.parse({ port, connectionKey, publicUrl }), api), /already in use/);
   assert.equal(manager.status().running, false);
   assert.equal(await (await fetch(`http://127.0.0.1:${port}`)).text(), "existing service");
   await manager.start(configSchema.parse({ port: await freePort(), connectionKey, publicUrl }), api);
@@ -62,7 +62,7 @@ test("concurrent start and stop serialize and an empty connection key cannot bin
   const manager = new McpServerManager();
   t.after(() => manager.stop());
   const config = configSchema.parse({ port: await freePort(), connectionKey, publicUrl });
-  await assert.rejects(manager.start({ ...config, connectionKey: "" }, api), /연결 비밀키/);
+  await assert.rejects(manager.start({ ...config, connectionKey: "" }, api), /connection key/);
   await Promise.all([manager.start(config, api), manager.stop()]);
   assert.equal(manager.status().running, false);
 });
@@ -103,8 +103,8 @@ test("both public URL and connection key are mandatory and OAuth is always avail
   const manager = new McpServerManager();
   t.after(() => manager.stop());
   const config = configSchema.parse({ port: await freePort(), connectionKey, publicUrl });
-  await assert.rejects(manager.start({ ...config, publicUrl: "" }, api), /공개 HTTPS/);
-  await assert.rejects(manager.start({ ...config, connectionKey: "" }, api), /연결 비밀키/);
+  await assert.rejects(manager.start({ ...config, publicUrl: "" }, api), /public HTTPS/);
+  await assert.rejects(manager.start({ ...config, connectionKey: "" }, api), /connection key/);
   assert.equal(manager.status().running, false);
   const status = await manager.start(config, api);
   const metadata = await fetch(new URL("/.well-known/oauth-authorization-server", status.upstreamUrl!));
