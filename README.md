@@ -1,95 +1,50 @@
 # pasear
 
-Control your Paseo agents from web chat. Start work, inspect several agents, switch between tasks, send follow-ups, read conversations and activity, summarize results, and stop a run through a remote MCP connection.
+Control your Paseo agents from Claude, ChatGPT, Gemini, or Grok web chat. Start tasks, send follow-ups, check progress, and summarize results.
 
-[한국어 안내](README.ko.md)
+[한국어](README.ko.md) · [Detailed guide](docs/reference.md)
 
-![A sunlit walking path winding through a green forest](assets/forest-path.png)
-
-```text
-Web chat → your HTTPS proxy → pasear MCP server → Paseo → coding agents
-```
+![A sunlit forest path](assets/forest-path.png)
 
 ## Install
 
-Requires Paseo daemon and client **0.11.2 or later**, npm, and the local `paseo` CLI for stopping runs and importing native sessions.
+Requires Paseo daemon and app 0.11.2+, plugins enabled, npm, and the local `paseo` CLI.
 
 ```bash
 paseo plugin add git:tkfka1/pasear --ref v0.12.2
 ```
 
-Paseo installs the locked runtime dependencies with `npm ci --omit=dev --ignore-scripts`. The installed plugin ID remains `paseo-mcp-plugin`; the display name is **pasear**. The interface is currently in Korean.
+Open **pasear** in the Paseo sidebar, then choose one connection method below.
 
-## Connect a chat
+## Option 1 · External proxy
 
-1. Open **pasear** in Paseo. Select the host you want to control.
-2. Configure a public HTTPS proxy or load balancer for that host's listener. The default listener is `0.0.0.0:8787`, allowing network access from your proxy. Choose `127.0.0.1` in advanced settings for a proxy on the same host only. Existing saved settings keep their selected address.
-3. Enter the public MCP URL, such as `https://mcp.example.com`, and select **Save and start**. Further settings and chat connections stay on the same screen. The listener starts stopped after a plugin reload.
-4. Add that URL as an OAuth MCP connector in your chat. For Claude, choose **Automatically register** (DCR).
-5. Enter the connection key in the OAuth browser window. In Paseo, compare the confirmation code and callback URL, select allowed projects, workspaces, or individual agents, and approve the connection. No targets are selected by default.
+1. Route a public HTTPS domain, such as `https://mcp.example.com`, to the Paseo host's HTTP port `8787` using your load balancer or reverse proxy.
+2. In pasear, use `0.0.0.0:8787` when the proxy is on another machine, or `127.0.0.1:8787` when it is on the same host.
+3. Enter the HTTPS domain in **공개 MCP 주소**, then press **저장하고 켜기**.
 
-The domain root is the MCP endpoint; existing `/mcp` addresses and approved connections also remain supported. Route the entire public hostname to the listener, preserving paths. OAuth also needs `/authorize`, `/register`, `/token`, `/revoke`, `/oauth/flow/*`, and `/.well-known/*`, not just `/mcp`. The connection key belongs in the OAuth browser form, never in chat or a custom API-key header.
+Forward **all paths** to the listener, including `/`, `/mcp`, `/oauth/*`, `/.well-known/*`, `/authorize`, `/register`, `/token`, and `/revoke`. Preserve paths and the Authorization header.
 
-Claude, ChatGPT, Gemini, and Grok connector availability depends on the account, plan, region, and service. Full real-account testing across all four is incomplete. See the [Korean guide](README.ko.md#웹-채팅-설정) for service-specific references.
+## Option 2 · Tailscale Funnel
 
-## Use it conversationally
-
-Select the connector in your chat, then ask naturally:
-
-- “Show my projects, then the workspaces in the shop project.”
-- “Show the current tasks and anything that needs my attention.”
-- “Check the login task, then tell that agent to run regression tests.”
-- “How is the deployment task going?”
-- “Summarize the result in three lines.”
-- “Stop that task.”
-- “Bring back the archived login task's original session.”
-- “Summarize the login task's history and hand it to a new Codex agent.”
-
-The chat model chooses and combines tools; no invocation keyword is required. It keeps task IDs within the current chat. Exact unique task/workspace names also work, and ambiguous names require selection. The web chat brand does not determine which coding provider runs the task.
-
-| Tool | Purpose |
-| --- | --- |
-| `list_projects` | List allowed parent projects; distinguish full project access from partial child access. |
-| `list_workspaces` | Discover allowed workspaces, optionally within a project. |
-| `list_agents` | List allowed tasks and their state, optionally by project or workspace; include archived tasks when needed. |
-| `list_providers` | Discover available coding providers for a workspace. |
-| `list_models` | Choose a provider model. |
-| `create_agent` | Create a task in an allowed workspace, optionally selecting its parent project; return an acceptance receipt. |
-| `send_agent_prompt` | Send a follow-up; steer by default, interrupt only when requested. |
-| `get_agent` | Inspect summary, status, conversation messages, or paged work activity; optionally wait up to 20 seconds. |
-| `cancel_agent` | Request interruption of the current run while retaining history and edits. |
-| `import_agent` | Recover an original provider session (`native`) or start a separate session from history (`handoff`). |
-
-Acceptance is not completion, and an idle state is not proof of success. Follow history cursors before claiming to have read a whole conversation. The chat model generates retry keys and reuses them only for the same intended operation.
-
-Native import requires host-wide access with the current CLI, retained provider session data, and provider recovery support. It does not send a follow-up prompt or change the provider. Handoff needs read access to the source and creation access to the destination; it carries a chat-written summary plus bounded recent history. It does not restore old files, branches, worktrees, or provider runtime state.
-
-## Access and multiple hosts
-
-Each connection has one task-control permission, limited to the projects, workspaces, and agents allowed by the owner. Project discovery uses the same access rules: a child-only grant reveals its parent name, not sibling workspaces, project paths, or totals. An empty project appears only when the project is fully allowed. Select projects in the connection’s access editor. Whole projects/workspaces include future children; an agent-only selection cannot create new agents. Access edits and revocation apply without reconnecting. These limits govern MCP operations, not the provider's filesystem sandbox or tool permissions. Answer provider permission requests in Paseo.
-
-Install pasear independently on each host. Each needs its own public URL and chat connector. Changing the host in the Paseo screen does not retarget a connected chat, and the load balancer must not distribute requests across unrelated hosts.
-
-Prompts and selected history go to the chat service and selected coding provider. OAuth state stays on the daemon host. Tool activity omits raw tool arguments/output and reasoning; conversation text may contain sensitive task data. This plugin is trusted local code and uses OAuth DCR, S256 PKCE, a connection key, and explicit owner approval.
-
-## MCP traffic logs
-
-Switch between the **연결 / 로그** tabs on the same screen. Choose **수집함 / 수집 안 함** in the log tab. Collection off bypasses new request/response capture, file writes and in-memory tool audit, releases active response capture immediately, and persists across reloads. Existing logs remain available. Inspect bodies, filter by connection name/ID or tool name, refresh, or delete all logs. Logs show 25 records per page with Previous/Next controls. Tabs preserve filters and the current page; changing filters, refreshing or deleting resets to page one. New records are not inserted automatically into the displayed page. Exports include every matching record across pages. Pending connection approvals remain visible through the connection tab count. Web clients can download one record or all matching records as JSONL; native apps can share individual records. Deletion affects all filters and prevents already-running requests from recreating erased records. Recording changes apply without restarting MCP.
-
-Recording starts enabled and persists under `$PASEO_HOME/plugin-data/paseo-mcp-plugin/logs/` with `0700` directories and `0600` files. Files rotate at 4 MiB with a 7-day, 50 MiB retention limit. Preferences and logs survive reloads. Disk errors and queue-pressure drops appear in the management UI; logging failures do not fail MCP operations.
-
-Both MCP endpoints record initialization, discovery, calls, notifications and errors, including bodies, connection identifiers, timestamps, duration and HTTP status. OAuth routes, headers, cookies and URL queries are excluded; unauthenticated requests have metadata only. Known connection keys, the request's Bearer token, and credential-named fields are redacted, including nested JSON text. Arbitrary secrets embedded in task text cannot all be detected; at-rest encryption is separate. Responses exceeding 1 MiB get a `body_size_limit` marker, and excessive nesting/complexity gets a `structure_limit` marker. The screen previews 32,000 characters per body; exports contain the complete stored record. Logs are accessible only through authenticated Paseo management RPCs, never external MCP tools. They do not capture the chat service's entire conversation.
-
-## Develop and verify
+On the Paseo host, [install and sign in to Tailscale](https://tailscale.com/docs/install), then run:
 
 ```bash
-npm ci --ignore-scripts
-npm run typecheck
-npm test
+tailscale funnel --bg http://127.0.0.1:8787
 ```
 
-The suite covers HTTP MCP, OAuth, scoped access, lifecycle, import/handoff, concurrent retries, and access changes during requests. Mutation tests use fake Paseo APIs and CLI execution; actual user-session restoration and new-agent execution are not part of those checks. Public HTTPS authentication, owner approval, SDK reads, and revocation have been checked separately.
+Complete the Funnel enablement steps if prompted. Copy the displayed `https://<machine>.<tailnet>.ts.net` URL into pasear's **공개 MCP 주소**, select `127.0.0.1:8787` in advanced settings, and press **저장하고 켜기**.
 
-## License
+Funnel exposes the service publicly over HTTPS; Tailscale Serve alone is private to your tailnet. See the [official Funnel guide](https://tailscale.com/docs/features/tailscale-funnel).
+
+## Connect your chat
+
+1. Add the same public HTTPS URL as an OAuth MCP connector. A domain-only URL works; `/mcp` also works. In Claude, choose **Automatically register** (DCR).
+2. Enter pasear's **connection key** in the OAuth browser window.
+3. In pasear's **연결** tab, verify the code and callback URL, select allowed projects, workspaces, or agents, and approve.
+4. Select the connector in chat and ask: “Show my current tasks” or “Tell the login agent to run tests and summarize the result.”
+
+Connector availability depends on the chat service and account. Each Paseo host needs its own public URL and approval. After a plugin reload, press **서버 켜기** again.
+
+The **로그** tab provides paged traffic logs and a **수집 안 함** option. Logs default to on and retain up to 7 days / 50 MiB; known credentials are redacted, but task text can contain sensitive data.
 
 [MIT](LICENSE)

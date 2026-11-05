@@ -1,0 +1,65 @@
+# pasear reference
+
+[Quick start](../README.md) · [한국어](reference.ko.md)
+
+## Use it conversationally
+
+Select the connector in your chat, then ask naturally:
+
+- “Show my projects, then the workspaces in the shop project.”
+- “Show the current tasks and anything that needs my attention.”
+- “Check the login task, then tell that agent to run regression tests.”
+- “How is the deployment task going?”
+- “Summarize the result in three lines.”
+- “Stop that task.”
+- “Bring back the archived login task's original session.”
+- “Summarize the login task's history and hand it to a new Codex agent.”
+
+The chat model chooses and combines tools; no invocation keyword is required. It keeps task IDs within the current chat. Exact unique task/workspace names also work, and ambiguous names require selection. The web chat brand does not determine which coding provider runs the task.
+
+| Tool | Purpose |
+| --- | --- |
+| `list_projects` | List allowed parent projects; distinguish full project access from partial child access. |
+| `list_workspaces` | Discover allowed workspaces, optionally within a project. |
+| `list_agents` | List allowed tasks and their state, optionally by project or workspace; include archived tasks when needed. |
+| `list_providers` | Discover available coding providers for a workspace. |
+| `list_models` | Choose a provider model. |
+| `create_agent` | Create a task in an allowed workspace, optionally selecting its parent project; return an acceptance receipt. |
+| `send_agent_prompt` | Send a follow-up; steer by default, interrupt only when requested. |
+| `get_agent` | Inspect summary, status, conversation messages, or paged work activity; optionally wait up to 20 seconds. |
+| `cancel_agent` | Request interruption of the current run while retaining history and edits. |
+| `import_agent` | Recover an original provider session (`native`) or start a separate session from history (`handoff`). |
+
+Acceptance is not completion, and an idle state is not proof of success. Follow history cursors before claiming to have read a whole conversation. The chat model generates retry keys and reuses them only for the same intended operation.
+
+Native import requires host-wide access with the current CLI, retained provider session data, and provider recovery support. It does not send a follow-up prompt or change the provider. Handoff needs read access to the source and creation access to the destination; it carries a chat-written summary plus bounded recent history. It does not restore old files, branches, worktrees, or provider runtime state.
+
+## Access and multiple hosts
+
+Each connection has one task-control permission, limited to the projects, workspaces, and agents allowed by the owner. Project discovery uses the same access rules: a child-only grant reveals its parent name, not sibling workspaces, project paths, or totals. An empty project appears only when the project is fully allowed. Select projects in the connection’s access editor. Whole projects/workspaces include future children; an agent-only selection cannot create new agents. Access edits and revocation apply without reconnecting. These limits govern MCP operations, not the provider's filesystem sandbox or tool permissions. Answer provider permission requests in Paseo.
+
+Install pasear independently on each host. Each needs its own public URL and chat connector. Changing the host in the Paseo screen does not retarget a connected chat, and the load balancer must not distribute requests across unrelated hosts.
+
+Prompts and selected history go to the chat service and selected coding provider. OAuth state stays on the daemon host. Tool activity omits raw tool arguments/output and reasoning; conversation text may contain sensitive task data. This plugin is trusted local code and uses OAuth DCR, S256 PKCE, a connection key, and explicit owner approval.
+
+## MCP traffic logs
+
+Switch between the **연결 / 로그** tabs on the same screen. Choose **수집함 / 수집 안 함** in the log tab. Collection off bypasses new request/response capture, file writes and in-memory tool audit, releases active response capture immediately, and persists across reloads. Existing logs remain available. Inspect bodies, filter by connection name/ID or tool name, refresh, or delete all logs. Logs show 25 records per page with Previous/Next controls. Tabs preserve filters and the current page; changing filters, refreshing or deleting resets to page one. New records are not inserted automatically into the displayed page. Exports include every matching record across pages. Pending connection approvals remain visible through the connection tab count. Web clients can download one record or all matching records as JSONL; native apps can share individual records. Deletion affects all filters and prevents already-running requests from recreating erased records. Recording changes apply without restarting MCP.
+
+Recording starts enabled and persists under `$PASEO_HOME/plugin-data/paseo-mcp-plugin/logs/` with `0700` directories and `0600` files. Files rotate at 4 MiB with a 7-day, 50 MiB retention limit. Preferences and logs survive reloads. Disk errors and queue-pressure drops appear in the management UI; logging failures do not fail MCP operations.
+
+Both MCP endpoints record initialization, discovery, calls, notifications and errors, including bodies, connection identifiers, timestamps, duration and HTTP status. OAuth routes, headers, cookies and URL queries are excluded; unauthenticated requests have metadata only. Known connection keys, the request's Bearer token, and credential-named fields are redacted, including nested JSON text. Arbitrary secrets embedded in task text cannot all be detected; at-rest encryption is separate. Responses exceeding 1 MiB get a `body_size_limit` marker, and excessive nesting/complexity gets a `structure_limit` marker. The screen previews 32,000 characters per body; exports contain the complete stored record. Logs are accessible only through authenticated Paseo management RPCs, never external MCP tools. They do not capture the chat service's entire conversation.
+
+## Develop and verify
+
+```bash
+npm ci --ignore-scripts
+npm run typecheck
+npm test
+```
+
+The suite covers HTTP MCP, OAuth, scoped access, lifecycle, import/handoff, concurrent retries, and access changes during requests. Mutation tests use fake Paseo APIs and CLI execution; actual user-session restoration and new-agent execution are not part of those checks. Public HTTPS authentication, owner approval, SDK reads, and revocation have been checked separately.
+
+## License
+
+[MIT](../LICENSE)
