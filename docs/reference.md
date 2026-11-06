@@ -36,16 +36,60 @@ The chat model chooses and combines tools; no invocation keyword is required. It
 | `list_providers` | Discover available coding providers for a workspace. |
 | `list_models` | Choose a provider model. |
 | `create_agent` | Create a task in an allowed workspace, optionally selecting its parent project; return an acceptance receipt. |
-| `send_agent_prompt` | Send a follow-up; steer by default, interrupt only when requested. |
+| `send_agent_prompt` | Send into the active turn (`steer`, default, with interrupt fallback) or interrupt/replace it (`interrupt`); neither is a completion queue. |
 | `get_agent` | Inspect summary, status, conversation messages, or paged work activity; optionally wait up to 20 seconds. |
 | `wait_for_agent` | Poll one agent or up to 10 until a finish/permission request, with short repeatable waits and a message excerpt. |
 | `respond_to_agent` | Send an explicit user approval, denial, offered action, or question answer to a current pending request. |
 | `cancel_agent` | Request interruption of the current run while retaining history and edits. |
+| `close_agent` | Paseo-style close, implemented as archive; requires whole-host access. |
+| `archive_agent` | Soft-delete and close the runtime; may cascade to children, so requires whole-host access. |
+| `delete_agent` | Immediately request hard deletion of one allowed agent's Paseo record/timeline via the local CLI. |
 | `import_agent` | Recover an original provider session (`native`) or start a separate session from history (`handoff`). |
 
 Acceptance is not completion, and an idle state is not proof of success. Follow history cursors before claiming to have read a whole conversation. The chat model generates retry keys and reuses them only for the same intended operation.
 
 Native import requires host-wide access with the current CLI, retained provider session data, and provider recovery support. It does not send a follow-up prompt or change the provider. Handoff needs read access to the source and creation access to the destination; it carries a chat-written summary plus bounded recent history. It does not restore old files, branches, worktrees, or provider runtime state.
+
+## Send behavior and queues
+
+Checked **2026-11-06**, against the installed **Paseo CLI/daemon 0.15.0** and the plugin's **SDK 0.11.2**. These are source/contract checks, not live provider timing measurements or a claim about every Paseo version.
+
+| `send_agent_prompt.behavior` | Verified dispatch path |
+| --- | --- |
+| `steer` (unchanged default) | Waits for any foreground turn still starting to obtain an ID, then asks the provider to steer that active turn. An accepted steer stays in that turn. If steering is unavailable, Paseo normally interrupts/replaces the foreground turn. An idle agent starts a new turn. |
+| `interrupt` | Bypasses steering and interrupts/replaces a running turn; an idle agent starts a new turn. |
+
+The [official CLI guide](https://paseo.sh/docs/cli#sending-messages) documents steering's interrupt/replace fallback. `send_agent_prompt` already forwards both options as `activeTurnBehavior`; this change leaves its default, send arguments and receipt unchanged. The receipt means daemon acceptance. It cannot establish whether the provider steered or fell back, or the exact moment the provider uses the new text: SDK `send()` returns `Promise<void>`, not a delivery disposition.
+
+Three different mechanisms must be distinguished:
+
+- **App composer queue:** the bundled 0.15.0 app implements `queueComposerMessage` in its session store's `queuedMessages` map. `drainQueuedAgentMessage` takes the first queued message when an agent stops running or timeline synchronization observes idle, then dispatches it using `steer`. This is an actual app-side queue, separate from the server's two behavior values. The checked public plugin SDK/CLI have no enqueue/list/remove action for this app queue.
+- **Agent-to-agent delivery buffer:** daemon `session.js` routes source-agent messages to `agent-messages/delivery.js`, which batches after two quiet seconds and then dispatches using steer/interrupt. It does not wait for the recipient's task to finish. The plugin's checked `SendMessageOptions` does not expose source-agent identity, and pasear does not impersonate a source agent to enter that path.
+- **Public prompt behavior:** the checked SDK/protocol and CLI `--behavior` accept only `steer` and `interrupt`; there is no public `queue` / `after_finish` mode for user prompts. No pretend queue option was added.
+
+pasear currently does not support message queuing because the app queue has no public control API. Support is planned once a public API becomes available.
+
+Source checkpoints: installed CLI `commands/agent/send.js`; SDK `index.js` agent `send` and `daemon-client.d.ts` `SendMessageOptions`; daemon `agent/agent-prompt.js`, `agent/agent-manager.js` (`steerOrReplaceActiveTurn`) and `session.js` (`handleSendAgentMessageRequest`); bundled app functions named above. These checks establish dispatch behavior, not the exact safe point at which each provider applies steering. Provider-internal scheduling and timing remain unverified.
+
+For “after the current task, run tests”, repeat `wait_for_agent` until `reason=idle`, inspect the outcome, then call `send_agent_prompt` with a fresh `messageId`. Handle permission, error, and closed separately; they do not mean success. This is a chat-controlled alternative, **not an atomic or durable FIFO**: another sender can start work between the idle observation and the send, and continuation stops if the chat stops executing tools. Use Paseo's app queue when its queue controls are needed. A durable external queue would require separate persistence, cancellation, deduplication and access revalidation; it is outside the checked public modes.
+
+## Clean up agents
+
+All three tools take `{ "agentId": "<ID or exact unique title>" }`, including archived targets, use the existing `paseo:write` scope and connection rules, and run immediately when called. There is no prepare/confirm tool, confirmation token, or extra consent argument. An unclear/ambiguous target still returns `needs_selection`. The existing `cancel_agent`, send, get and import behaviors are unchanged.
+
+| Tool | Supported effect and receipt |
+| --- | --- |
+| `close_agent` | Calls public SDK `archive()`, matching Paseo's `close_items` UI operation, which archives agents. Returns `operation="close"`, `archived`, `archivedAt` and `alreadyArchived`. |
+| `archive_agent` | Same SDK action with `operation="archive"`. Closes the runtime and soft-deletes a normal durable agent. An already archived target returns its timestamp without archiving again. |
+| `delete_agent` | Calls public `paseo agent delete <exact-id> --home <this-daemon-home> --json`. The CLI interrupts a running agent then hard-deletes its Paseo record/timeline. Returns `deletionRequested=true`, not proof of full data erasure. No bulk flags or remote host selector are exposed. |
+
+The [SDK reference](https://paseo.sh/docs/sdk/reference#agent-handle) exposes `archive()` but no standalone agent runtime-only `close()` or `delete()` in the checked plugin contract. Client `close()` closes a connection, not an agent. Thus close is explicitly an archive alias; no private runtime-close RPC is invented. Permanent deletion uses the local documented CLI, with a 15-second process timeout and a 64 KiB output limit. The adapter captures the daemon home, passes literal argv without a shell, rejects option/control-character IDs, and requires a receipt containing exactly one deletion of the resolved ID. Even an exit-zero CLI result with zero deletions is rejected. Raw SDK/CLI errors are not returned to chat.
+
+Paseo [cascade-archives a parent's children](https://paseo.sh/docs/sdk/agents#create-a-subagent), including internal children absent from normal listings. A catalogue scan cannot atomically authorize that cascade or exclude children created during it. **Close/archive therefore require whole-host access**, even for an apparently childless agent; project/workspace/agent-only grants are rejected before mutation. This restriction preserves the existing access boundary and never expands it automatically. Use Paseo for scoped archive management, or `cancel_agent` to interrupt only the allowed agent's run. Deleting a single allowed agent remains available under scoped access; it is not an automatic substitute for archive. Closing/deleting a runtime may stop that provider's nested work.
+
+After a cleanup receipt, follow `next="list_agents"` with `includeArchived=true`. Normal archived history remains available to `get_agent`; recovery through `import_agent(mode=native)` requires whole-host access, retained native data and provider support. Archive is not a backup, and internal/transient agents need not retain durable history. Deletion removes Paseo's record and timeline; provider-native history may remain, and no supported “undo delete” is promised. Neither action removes workspace files, branches or worktrees, or reverts edits.
+
+Failures/timeouts can occur after mutation. On an uncertain result, inspect the catalogue/Paseo before retrying. Access revision and placement are checked before mutation; a revoked/changed grant suppresses the response afterward, without assuming a deleted agent still exists. These checks cannot undo a mutation already accepted by the daemon. Tests use mocked SDK/CLI execution, not real user-agent archive or deletion.
 
 ## Wait for an agent
 
@@ -81,7 +125,7 @@ Read `get_agent(view=requests)` or the `pendingRequests` in `wait_for_agent`. Re
 
 Question answers follow the native Paseo form contract: single-select, multi-select, free text when `allowOther` is true (or no options are offered), and empty input only when allowed. Multi-select joins the selected labels and custom text as Paseo does. Unsupported shapes and truncated requests have `supported=false`; handle these in Paseo or explicitly deny them. Each response needs the exact fingerprint of the current request, not a guessed or reused choice. `get_agent`'s other views retain their behavior; `view=requests` does not read the timeline. Request views omit arbitrary provider metadata and environment, but approval commands and task text may contain secrets. They go to the connected chat and may appear in local traffic logs.
 
-The server rechecks scope and placement, verifies the request is still pending and unchanged, and serializes responses to the same request across chats. A receipt indicates dispatch acceptance, not completion or successful execution. Exact retries within 30 minutes replay the receipt; conflicting decisions are rejected. Already-resolved requests are not sent again. Receipts are limited to 1,000 per listener and are cleared on restart. If delivery is uncertain, `status=response_uncertain` and `accepted=null`: inspect pending requests and use Paseo if necessary rather than resending automatically. After answering, use `wait_for_agent` again. Full real-provider approval/question flows in all chat clients have not been verified.
+The server rechecks scope and placement, verifies the request is still pending and unchanged, and serializes responses to the same request across chats. A receipt indicates dispatch acceptance, not completion or successful execution. Exact retries within 30 minutes replay the receipt; conflicting decisions are rejected. Already-resolved requests are not sent again. Receipts are limited to 1,000 per listener and are cleared on restart. If delivery is uncertain, `status=response_uncertain` and `accepted=null`: inspect pending requests and use Paseo if necessary rather than resending automatically. After answering, use `wait_for_agent` again. User-confirmed live verification for GPT (Codex), Gemini, and Grok was completed on 2026-11-06; see the verification table below.
 
 ## Access and multiple hosts
 
@@ -101,7 +145,7 @@ Both MCP endpoints record initialization, discovery, calls, notifications and er
 
 ## Versions
 
-Recorded **2026-11-05** for pasear **0.13.0**. Environment observations and documentation reviews have separate scopes.
+Environment and dependency versions recorded **2026-11-05** for pasear **0.13.0**. Environment observations, documentation reviews and user-confirmed live verification have separate dates and scopes.
 
 | Component | Version / evidence |
 | --- | --- |
@@ -133,11 +177,11 @@ Git installation uses `npm ci --omit=dev --ignore-scripts`. Paseo supplies the p
 | Web chat | Official registration guide checked | Live verification |
 | --- | --- | --- |
 | [Claude](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) | `2026-11-05` | User confirmed OAuth connection; the test date was not recorded. |
-| [ChatGPT](https://developers.openai.com/plugins/deploy/connect-chatgpt) | `2026-11-05` | Not verified in this environment. |
-| [Gemini](https://developers.google.com/connected-apps/mcp/dev-mode/usage) | `2026-11-05` | Not verified in this environment. |
-| [Grok](https://docs.x.ai/grok/connectors#custom-mcp-connectors) | `2026-11-05` | Not verified in this environment. |
+| [ChatGPT](https://developers.openai.com/plugins/deploy/connect-chatgpt) | `2026-11-05` | GPT (Codex): live verification completed by the user on `2026-11-06`. |
+| [Gemini](https://developers.google.com/connected-apps/mcp/dev-mode/usage) | `2026-11-05` | Live verification completed by the user on `2026-11-06`. |
+| [Grok](https://docs.x.ai/grok/connectors#custom-mcp-connectors) | `2026-11-05` | Live verification completed by the user on `2026-11-06`. |
 
-These dates track setup documentation, not model versions or a complete task-control test. Web chat menus and availability can change independently of pasear releases.
+The second column tracks setup documentation review; the third records live verification reported by the user. The user's GPT (Codex), Gemini, and Grok results were accepted without independent retesting. These are not AI model version dates. Web chat menus and availability can change independently of pasear releases.
 
 ## Develop and verify
 

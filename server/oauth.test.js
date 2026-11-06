@@ -108,7 +108,7 @@ for (const configuredPublicUrl of ["https://paseo.example", "https://paseo.examp
         const response = await h.request(path, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${tokens.access_token}` }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "root-test", version: "1" } } }) });
         assert.equal(response.status, 200);
         assert.ok((await response.json()).result.serverInfo);
-        assert.equal((await h.call(tokens.access_token, "tools/list", {}, path)).body.result.tools.length, 12);
+        assert.equal((await h.call(tokens.access_token, "tools/list", {}, path)).body.result.tools.length, 15);
         const unsupported = await h.request(path, { headers: { authorization: `Bearer ${tokens.access_token}` } });
         assert.equal(unsupported.status, 405);
         assert.equal(unsupported.headers.get("allow"), "POST");
@@ -199,7 +199,7 @@ test("new connections have one task-control permission and reject partial reques
   }
   const approved = await h.authorize({ extra: { scope: SCOPES.join(" ") }, workspaceIds: ["yes"] });
   assert.deepEqual([...approved.grant.scopes].sort(), [...SCOPES].sort());
-  assert.equal((await h.call(approved.tokens.access_token, "tools/list")).body.result.tools.length, 12);
+  assert.equal((await h.call(approved.tokens.access_token, "tools/list")).body.result.tools.length, 15);
   const challenge = (await h.request("/mcp")).headers.get("www-authenticate");
   assert.ok(challenge.includes('scope="paseo:read paseo:write paseo:cancel"'));
 });
@@ -245,7 +245,7 @@ test("previously approved tokens gain task control without reconnecting and keep
   for (const kind of ["access", "refresh"]) for (const entry of Object.values(h.store.data[kind])) if (entry.grantId === grant.id) entry.scopes = ["paseo:read"];
   new PaseoOAuthProvider(h.store, publicUrl, connectionKey);
   const tools = (await h.call(tokens.access_token, "tools/list")).body.result.tools;
-  assert.equal(tools.length, 12);
+  assert.equal(tools.length, 15);
   assert.deepEqual((await h.call(tokens.access_token, "list_workspaces")).body.result.structuredContent.entries.map((w) => w.workspaceId), ["yes"]);
   assert.deepEqual((await h.call(tokens.access_token, "list_agents")).body.result.structuredContent.entries.map((a) => a.agentId), ["a"]);
   assert.equal((await h.call(tokens.access_token, "get_agent", { agentId: "b" })).body.result.isError, true);
@@ -325,12 +325,12 @@ test("control connections expose all tools with action hints and isolated retry 
   const first = await h.authorize();
   const second = await h.authorize();
   const catalogue = (await h.call(second.tokens.access_token, "tools/list")).body.result.tools;
-  assert.equal(catalogue.length, 12);
+  assert.equal(catalogue.length, 15);
   assert.deepEqual(catalogue.find((tool) => tool.name === "get_agent")._meta.securitySchemes[0].scopes, ["paseo:read"]);
   assert.deepEqual(catalogue.find((tool) => tool.name === "wait_for_agent")._meta.securitySchemes[0].scopes, ["paseo:read"]);
   assert.deepEqual(catalogue.find((tool) => tool.name === "cancel_agent")._meta.securitySchemes[0].scopes, ["paseo:cancel"]);
   assert.equal(catalogue.find((tool) => tool.name === "cancel_agent").annotations.destructiveHint, true);
-  assert.equal((await h.call(first.tokens.access_token, "tools/list")).body.result.tools.length, 12);
+  assert.equal((await h.call(first.tokens.access_token, "tools/list")).body.result.tools.length, 15);
   for (const tokens of [first.tokens, first.tokens, second.tokens]) {
     const result = await h.call(tokens.access_token, "send_agent_prompt", { agentId: "a", prompt: "Continue", messageId: "same-key" });
     assert.equal(result.body.result.structuredContent.accepted, true);
@@ -420,7 +420,7 @@ test("refresh normalizes cached scopes to task control and rejects unknown scope
     assert.equal(response.status, 200);
     const full = await response.json();
     assert.equal(full.scope, SCOPES.join(" "));
-    assert.equal((await h.call(full.access_token, "tools/list")).body.result.tools.length, 12);
+    assert.equal((await h.call(full.access_token, "tools/list")).body.result.tools.length, 15);
     refresh = full.refresh_token;
   }
 });

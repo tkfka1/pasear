@@ -13,8 +13,16 @@ Requires Paseo daemon and app 0.11.2+, plugins enabled, npm, and the local `pase
 Environment checked **2026-11-05**: Paseo CLI/daemon **0.15.0**, Node.js **24.21.0**, npm **11.19.0**. [Language, library versions and verification details](docs/reference.md#versions).
 
 ```bash
-paseo plugin add git:tkfka1/pasear --ref v0.13.0
+paseo plugin add tkfka1/pasear
 ```
+
+Or find **pasear** in Paseo's plugin directory. Registry installs use the reviewed release and can lag behind GitHub. To install GitHub release **v0.14.0** directly:
+
+```bash
+paseo plugin add git:tkfka1/pasear --ref v0.14.0
+```
+
+Update an existing installation with `paseo plugin update paseo-mcp-plugin`. For a direct Git installation, use `paseo plugin update paseo-mcp-plugin --ref v0.14.0` to select this release. After updating, start the MCP server again; saved settings and approved connections are retained.
 
 Open **pasear** in the Paseo sidebar, then choose one connection method below.
 
@@ -42,7 +50,7 @@ Funnel exposes the service publicly over HTTPS; Tailscale Serve alone is private
 
 Open your chat service in a browser and add a custom MCP connection:
 
-Official setup guides for all four services checked **2026-11-05**. Live connection verification is recorded in the [version details](docs/reference.md#versions).
+Official setup guides for all four services checked **2026-11-05**. **GPT (Codex), Gemini, and Grok: live verification completed by the user on 2026-11-06.** See the [verification details](docs/reference.md#versions).
 
 | Chat · official guide | Where to register pasear |
 | --- | --- |
@@ -71,6 +79,26 @@ Each call uses at most 20 seconds of polling/summary time (default 15), reservin
 To watch several tasks, pass `agentIds` instead of `agentId` (up to 10). The first finish/permission observed in a polling round is returned; ties use input order. Continue with `remainingAgentIds` to collect the others. Repeated tool calls depend on the chat client continuing the conversation; this does not send background notifications. [Tool details](docs/reference.md#wait-for-an-agent)
 
 When a task asks for approval or an answer, the chat shows the pending request and choices. Say “Approve that”, “Deny it”, “Choose the second option”, or give a text answer. `respond_to_agent` forwards your explicit decision, including multi-select answers when supported, then the chat can resume waiting. Request IDs and fingerprints are handled by the chat. Unsupported or oversized forms stay in Paseo. [Response details](docs/reference.md#answer-approvals-and-questions)
+
+## Send now or after completion
+
+`send_agent_prompt` already supports both public modes: `behavior="steer"` (default) forwards to the active turn when supported, falling back to interrupting/replacing it; `behavior="interrupt"` interrupts/replaces it directly. Idle agents start a new turn. Neither mode waits for the current task to finish.
+
+Paseo's app has a message queue, but no public API to control it is available yet. **pasear does not currently support message queuing; support is planned once a public API is available.**
+
+For now, for “when this finishes, run tests”, the chat can repeat `wait_for_agent` until `idle`, check the outcome, then call `send_agent_prompt`. Handle permission/error/closed separately. This requires an active chat and is not a durable or atomic enqueue operation; another sender may start a turn between calls. Exact provider delivery timing has not been measured. [Verified behavior and limits](docs/reference.md#send-behavior-and-queues)
+
+## Clean up agents
+
+Say “Close the login agent”, “Archive that task”, or “Delete that agent and its Paseo history”. Each tool takes only `agentId` (an ID or exact unique title) and executes immediately, without another confirmation step:
+
+| Tool | Effect |
+| --- | --- |
+| `close_agent` | Paseo-style close: archive the agent. |
+| `archive_agent` | Archive and close the runtime; normal stored history remains discoverable with `list_agents(includeArchived=true)`. |
+| `delete_agent` | Use the local CLI to interrupt if running and hard-delete that single agent's Paseo record/timeline. Returns a deletion request receipt. |
+
+Close/archive require **whole-host access** because Paseo may cascade the operation to descendants, including children invisible to scoped connections. Scoped connections can still delete an allowed agent or use the existing `cancel_agent` to stop its run. No access rules are broadened. Cleanup does not remove workspace files/branches or revert edits; deletion does not guarantee erasure of provider-native history. [Recovery and implementation details](docs/reference.md#clean-up-agents)
 
 The logs tab provides paged traffic logs and an option to disable collection. Logs default to on and retain up to 7 days / 50 MiB; known credentials are redacted, but task text can contain sensitive data.
 

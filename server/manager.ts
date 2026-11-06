@@ -7,6 +7,7 @@ import { TrafficLog } from "./traffic-log.js";
 import { OAuthStore } from "./oauth.js";
 import { stopAgent } from "./stop-agent";
 import { createNativeImporter } from "./import-agent";
+import { createAgentDeleter } from "./delete-agent";
 
 export class McpServerManager {
   constructor(readonly oauth = new OAuthStore(), readonly trafficLog?: TrafficLog) {}
@@ -15,6 +16,7 @@ export class McpServerManager {
   private startedAt: string | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   private readonly importAgent = createNativeImporter();
+  private readonly deleteAgent = createAgentDeleter();
   private exclusive<T>(work: () => Promise<T>): Promise<T> {
     const next = this.queue.then(work);
     this.queue = next.catch(() => {});
@@ -41,7 +43,7 @@ export class McpServerManager {
         throw new Error("Stop the server before changing listener settings.");
       }
       await this.trafficLog?.ready;
-      const app = createApp({ ...config, trafficLog: this.trafficLog, oauthStore: this.oauth, connection: { getApi: async () => paseo }, cancelAgent: stopAgent, importAgent: this.importAgent });
+      const app = createApp({ ...config, trafficLog: this.trafficLog, oauthStore: this.oauth, connection: { getApi: async () => paseo }, cancelAgent: stopAgent, importAgent: this.importAgent, deleteAgent: this.deleteAgent });
       const listener = app.listen(config.port, config.host);
       try {
         await new Promise<void>((resolve, reject) => {
